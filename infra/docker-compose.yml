@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mc
+      POSTGRES_PASSWORD: mc
+      POSTGRES_DB: mission_control
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Pas de port hôte (5432 souvent occupé) ; accès via `make psql`.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mc -d mission_control"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.api
+    command: ["sh", "infra/api-entrypoint.sh"]
+    working_dir: /app
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: postgresql+psycopg://mc:mc@postgres:5432/mission_control
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-change-me}
+      MC_INGEST_TOKEN: ${MC_INGEST_TOKEN:-dev-ingest-token}
+      MC_STATUS_DIR: /app/.mission-control/status
+    volumes:
+      # Repo monté → code + migrations + statuts mc live-éditables (mode dev).
+      - ..:/app
+    ports:
+      - "8008:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+
+  # Frontend conteneurisé — optionnel (build long). En dev, préférer `make web`.
+  # Activation : `docker compose --profile full up --build`
+  web:
+    profiles: ["full"]
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8008
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

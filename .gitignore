@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next
+node_modules/
+apps/web/.next/
+apps/web/out/
+
+# Env & secrets
+.env
+.env.*.local
+
+# Données runtime mission-control
+.mission-control/status/
+
+# OS
+.DS_Store
+docs/*.pdf
