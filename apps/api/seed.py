@@ -8,8 +8,9 @@ from apps.api.core.db import get_sessionmaker
 from apps.api.core.security import hash_password
 from apps.api.models import Project, ProjectStatus, User
 
-# Comptes de démo (un par rôle) — mot de passe = nom du rôle.
+# Comptes de démo. Le 1er est le login par défaut de la plateforme.
 SEED_USERS = [
+    ("demo@infinity.ae", "password", "admin"),
     ("admin@mc.local", "admin", "admin"),
     ("cto@mc.local", "cto", "cto"),
     ("pm@mc.local", "pm", "pm"),

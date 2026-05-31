@@ -21,8 +21,8 @@ export function Login({
   onToggleTheme?: () => void;
 }) {
   const { t, lang, setLang } = useI18n();
-  const [email, setEmail] = useState("admin@mc.local");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("demo@infinity.ae");
+  const [password, setPassword] = useState("password");
   const [err, setErr] = useState<{ email?: string; password?: string; server?: string }>({});
   const [busy, setBusy] = useState(false);
 

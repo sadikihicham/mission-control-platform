@@ -22,7 +22,7 @@ make web     # frontend : Next.js dev → http://localhost:3000
 make help    # toutes les commandes
 ```
 
-- **Web** → http://localhost:3000 — login : `admin@mc.local` / `admin`
+- **Web** → http://localhost:3000 — login : `demo@infinity.ae` / `password`
 - **API** → http://localhost:8008/health · docs http://localhost:8008/docs
 - Postgres/Redis : réseau interne uniquement (ports hôte 5432/6379 souvent occupés) → `make psql`, `make redis-cli`
 
