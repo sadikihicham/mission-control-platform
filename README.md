@@ -17,12 +17,12 @@ Cockpit de supervision du développement logiciel piloté par IA (agents Claude 
 
 ```bash
 make up      # backend : postgres + redis + api (migre + seed auto) → http://localhost:8008
-make web     # frontend : Next.js dev → http://localhost:3000
+make web     # frontend : Next.js dev (hôte) → http://localhost:3100
 # ou en une fois : make dev   (puis `make web` dans un autre terminal)
 make help    # toutes les commandes
 ```
 
-- **Web** → http://localhost:3000 — login : `demo@infinity.ae` / `password`
+- **Web** → http://localhost:3100 — login : `demo@infinity.ae` / `password`
 - **API** → http://localhost:8008/health · docs http://localhost:8008/docs
 - Postgres/Redis : réseau interne uniquement (ports hôte 5432/6379 souvent occupés) → `make psql`, `make redis-cli`
 
