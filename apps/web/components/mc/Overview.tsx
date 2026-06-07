@@ -69,9 +69,9 @@ const FILTER_KEY: Record<Filter, string> = {
   all: "f_all", working: "f_working", blocked: "f_blocked", stale: "f_stale", idle: "f_idle", done: "f_done",
 };
 
-export function Overview({ agents, onOpenAgent }: { agents: Agent[]; onOpenAgent: (a: Agent) => void }) {
+export function Overview({ agents, onOpenAgent, initialFilter }: { agents: Agent[]; onOpenAgent: (a: Agent) => void; initialFilter?: string }) {
   const { t } = useI18n();
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<Filter>((FILTERS as readonly string[]).includes(initialFilter ?? "") ? (initialFilter as Filter) : "all");
   const match = (a: Agent) =>
     filter === "all" ? true : filter === "blocked" ? a.state === "blocked" || a.state === "error" : a.state === filter;
   const shown = agents.filter(match);

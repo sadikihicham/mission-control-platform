@@ -55,6 +55,24 @@ def _token(client: TestClient, email: str, password: str) -> str:
 
 
 @pytest.fixture
+def make_user(db):
+    """Crée un utilisateur jetable (email unique) — isole les tests qui mutent
+    le mot de passe sans toucher aux comptes seedés partagés."""
+    import uuid as _uuid
+
+    from apps.api.core.security import hash_password
+    from apps.api.models import User
+
+    def _make(password: str = "initial1", role: str = "admin") -> str:
+        email = f"reset-{_uuid.uuid4().hex[:8]}@mc.local"
+        db.add(User(email=email, hashed_password=hash_password(password), role=role))
+        db.commit()
+        return email
+
+    return _make
+
+
+@pytest.fixture
 def admin_token(client):
     return _token(client, "admin@mc.local", "admin")
 

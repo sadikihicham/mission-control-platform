@@ -6,6 +6,7 @@ from apps.api.models.enums import AgentState, ProjectStatus
 from apps.api.models.tables import (
     ActivityLog,
     Agent,
+    PasswordResetToken,
     Project,
     Task,
     User,
@@ -17,6 +18,7 @@ __all__ = [
     "Agent",
     "Task",
     "ActivityLog",
+    "PasswordResetToken",
     "ProjectStatus",
     "AgentState",
 ]

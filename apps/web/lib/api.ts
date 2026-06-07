@@ -49,11 +49,15 @@ export type ProjectSummary = {
   agents_total: number;
   agents_active: number;
   agents_blocked: number;
+  // Droit d'édition calculé côté API selon le rôle de l'appelant.
+  editable?: boolean;
 };
 
 export type ProjectDetail = ProjectSummary & {
   tasks: Task[];
   agents: Agent[];
+  // Dépôt GitHub associé (lié via PATCH /projects/{id}).
+  repo?: string | null;
 };
 
 /* ---------- Auth (JWT en localStorage) ---------- */
@@ -66,9 +70,38 @@ export function getToken(): string | null {
 }
 export function setToken(t: string): void {
   window.localStorage.setItem(TOKEN_KEY, t);
+  // Une session active annule un éventuel "déconnexion manuelle" précédent.
+  window.sessionStorage.removeItem("mc_logged_out");
 }
 export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_KEY);
+}
+
+/* ---------- Connexion automatique (dev/démo) ----------
+   Ouvre la session sans passer par le formulaire. Pilotée par l'env :
+   - NEXT_PUBLIC_AUTO_LOGIN=0  désactive (défaut: activé)
+   - NEXT_PUBLIC_AUTO_LOGIN_EMAIL / _PASSWORD  surchargent les identifiants par défaut.
+   La déconnexion manuelle pose un drapeau (sessionStorage) pour ne PAS se reconnecter
+   tout de suite — on peut donc toujours revenir à l'écran de login. */
+export const AUTO_LOGIN = process.env.NEXT_PUBLIC_AUTO_LOGIN !== "0";
+const DEFAULT_EMAIL = process.env.NEXT_PUBLIC_AUTO_LOGIN_EMAIL ?? "demo@infinity.ae";
+const DEFAULT_PASSWORD = process.env.NEXT_PUBLIC_AUTO_LOGIN_PASSWORD ?? "password";
+const LOGOUT_FLAG = "mc_logged_out";
+
+export function markLoggedOut(): void {
+  if (typeof window !== "undefined") window.sessionStorage.setItem(LOGOUT_FLAG, "1");
+}
+
+/** Tente une connexion auto avec les identifiants par défaut. Renvoie le token
+ *  ou null (désactivée, déconnexion manuelle en cours, ou échec silencieux). */
+export async function autoLogin(): Promise<string | null> {
+  if (!AUTO_LOGIN || typeof window === "undefined") return null;
+  if (window.sessionStorage.getItem(LOGOUT_FLAG)) return null;
+  try {
+    return await login(DEFAULT_EMAIL, DEFAULT_PASSWORD);
+  } catch {
+    return null; // API down / identifiants invalides → on retombe sur le formulaire.
+  }
 }
 
 export async function login(email: string, password: string): Promise<string> {
@@ -81,6 +114,29 @@ export async function login(email: string, password: string): Promise<string> {
   const data = (await res.json()) as { access_token: string };
   setToken(data.access_token);
   return data.access_token;
+}
+
+export async function forgotPassword(email: string): Promise<{ message: string; dev_token: string | null }> {
+  const res = await fetch(`${API_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) throw new Error(`Erreur ${res.status}`);
+  return res.json();
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.detail ?? (res.status === 400 ? "Jeton invalide ou expiré" : `Erreur ${res.status}`));
+  }
+  return res.json();
 }
 
 export function wsUrl(token: string): string {
@@ -137,7 +193,7 @@ export const getAgentActivity = (key: string) =>
 
 /* ---------- Écriture (CRUD projets, rôle pm+) ---------- */
 
-export type Me = { id: string; email: string; role: string };
+export type Me = { id: string; email: string; role: string; full_name: string | null; civility: string | null };
 export const getMe = () => get<Me>("/auth/me");
 
 export const WRITE_ROLES = ["pm", "cto", "admin"];
@@ -169,6 +225,6 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T 
 
 export const createProject = (body: { name: string; description?: string; status?: string }) =>
   send<ProjectDetail>("POST", "/projects", body);
-export const updateProject = (id: string, body: { status?: string; name?: string; description?: string; progress?: number }) =>
+export const updateProject = (id: string, body: { status?: string; name?: string; description?: string; progress?: number; repo?: string | null }) =>
   send<ProjectDetail>("PATCH", `/projects/${id}`, body);
 export const deleteProject = (id: string) => send<null>("DELETE", `/projects/${id}`);

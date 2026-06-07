@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  autoLogin,
   canWrite,
   clearToken,
   createProject,
@@ -11,9 +12,11 @@ import {
   getProject,
   getProjects,
   getToken,
+  markLoggedOut,
   updateProject,
   wsUrl,
   type Agent,
+  type Me,
   type ProjectDetail,
   type ProjectSummary,
 } from "@/lib/api";
@@ -23,11 +26,31 @@ import { Shell } from "@/components/mc/Shell";
 import { Icon } from "@/components/mc/icons";
 import { ProjectCard, ProjectDetailPanel, ProjectsSummary } from "@/components/mc/Projects";
 import { Overview } from "@/components/mc/Overview";
-import { Hierarchy } from "@/components/mc/Hierarchy";
 import { AgentDetail } from "@/components/mc/AgentDetail";
+import { Home as HomeView } from "@/components/mc/Home";
+import { Depts } from "@/components/mc/Depts";
+import { HierarchyFlow } from "@/components/mc/HierarchyFlow";
+import { Audit } from "@/components/mc/Audit";
+import { Cost } from "@/components/mc/Cost";
+import { Sentinel } from "@/components/mc/Sentinel";
 import { CommandPalette } from "@/components/mc/Command";
 import { TweaksPanel, applyTweaks, TWEAK_DEFAULTS, type Tweaks } from "@/components/mc/Tweaks";
+import { AGENTS } from "@/lib/mc-data";
 import { useI18n } from "@/lib/i18n";
+
+// Badge de la cloche = nombre d'agents bloqués (flotte mock du design).
+const REVIEW_BADGE = AGENTS.filter((a: { status: string }) => a.status === "blocked").length;
+
+// Vues qui rendent la flotte réelle (Overview) avec un filtre de statut.
+const OVERVIEW_FILTER: Record<string, string> = {
+  overview: "all", running: "working", review: "blocked", queue: "idle", completed: "done", pending: "all",
+};
+const TITLE_KEY: Record<string, string> = {
+  home: "nav_home", overview: "nav_mission", projects: "nav_projects", departments: "nav_depts",
+  hierarchy: "nav_hierarchy", cost: "nav_cost", audit: "nav_audit",
+  running: "nav_running", review: "nav_review", pending: "nav_pending", queue: "nav_queue", completed: "nav_completed",
+  repos: "nav_repos",
+};
 
 function NewProjectForm({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
   const { t } = useI18n();
@@ -66,9 +89,11 @@ export default function Home() {
   const [token, setTokenState] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [tweaks, setTweaks] = useState<Tweaks>(TWEAK_DEFAULTS);
   const [tweaksOpen, setTweaksOpen] = useState(false);
-  const [view, setView] = useState<"projects" | "overview" | "hierarchy">("projects");
+  const [view, setView] = useState<string>("home");
+  const [collapsed, setCollapsed] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -84,12 +109,18 @@ export default function Home() {
 
   // Hydratation : token + tweaks (ambiance visuelle).
   useEffect(() => {
-    setTokenState(getToken());
     try {
       const saved = localStorage.getItem("mc-tweaks");
       if (saved) setTweaks({ ...TWEAK_DEFAULTS, ...JSON.parse(saved) });
     } catch { /* défauts */ }
-    setHydrated(true);
+    const existing = getToken();
+    if (existing) {
+      setTokenState(existing);
+      setHydrated(true);
+    } else {
+      // Pas de token : tente une connexion auto (identifiants par défaut).
+      autoLogin().then((tok) => { if (tok) setTokenState(tok); }).finally(() => setHydrated(true));
+    }
   }, []);
 
   // Applique les tweaks (variables CSS + thème) et persiste.
@@ -102,8 +133,8 @@ export default function Home() {
 
   // Rôle utilisateur.
   useEffect(() => {
-    if (!token) { setRole(null); return; }
-    getMe().then((m) => setRole(m.role)).catch(() => setRole(null));
+    if (!token) { setRole(null); setMe(null); return; }
+    getMe().then((m) => { setRole(m.role); setMe(m); }).catch(() => { setRole(null); setMe(null); });
   }, [token]);
 
   // Raccourci ⌘K / Ctrl+K pour la palette de commandes.
@@ -170,9 +201,9 @@ export default function Home() {
     return () => { alive = false; clearInterval(id); };
   }, [token, selected, signal]);
 
-  // Flotte (vue d'ensemble) : tous les agents (poll + signal).
+  // Flotte (vue d'ensemble + filtres de statut) : tous les agents (poll + signal).
   useEffect(() => {
-    if (!token || view !== "overview") return;
+    if (!token || !(view in OVERVIEW_FILTER)) return;
     let alive = true;
     const tick = async () => { try { const a = await getAgents(); if (alive) setAgents(a); } catch { /* */ } };
     tick();
@@ -190,75 +221,95 @@ export default function Home() {
   if (!hydrated) return null;
   if (!token) return <Login onLogin={setTokenState} theme={tweaks.dark ? "dark" : "light"} onToggleTheme={() => setTw({ dark: !tweaks.dark })} />;
 
-  const logout = () => { clearToken(); setTokenState(null); setSelected(null); };
+  const logout = () => { markLoggedOut(); clearToken(); setTokenState(null); setSelected(null); setSelectedAgent(null); };
   const writer = canWrite(role);
-  const counts = {
-    running: projects.reduce((s, p) => s + p.agents_active, 0),
-    blocked: projects.reduce((s, p) => s + p.agents_blocked, 0),
-    waiting: projects.reduce((s, p) => s + Math.max(0, p.agents_total - p.agents_active - p.agents_blocked), 0),
-  };
+  const isOverview = view in OVERVIEW_FILTER;
+  const isProjects = view === "projects" || view === "repos";
+  const title =
+    isOverview && selectedAgent ? (selectedAgent.label ?? selectedAgent.agent)
+    : isProjects && selected && detail ? detail.name
+    : t(TITLE_KEY[view] ?? "nav_mission");
+
+  let body: ReactNode;
+  if (isOverview) {
+    body = selectedAgent ? (
+      <AgentDetail agent={selectedAgent} subtasks={[]} onBack={() => setSelectedAgent(null)} />
+    ) : (
+      <Overview key={view} agents={agents} initialFilter={OVERVIEW_FILTER[view]} onOpenAgent={setSelectedAgent} />
+    );
+  } else if (isProjects) {
+    body = selected && detail ? (
+      <ProjectDetailPanel
+        project={detail}
+        onBack={() => setSelected(null)}
+        canEdit={writer && detail.editable}
+        onStatus={writer && detail.editable ? async (status) => { await updateProject(detail.id, { status }); setSignal((s) => s + 1); } : undefined}
+        onRepo={writer && detail.editable ? async (repo) => { await updateProject(detail.id, { repo }); setSignal((s) => s + 1); } : undefined}
+        onDelete={writer && detail.editable ? async () => { await deleteProject(detail.id); setSelected(null); reloadProjects(); } : undefined}
+      />
+    ) : (
+      <div className="pj-page">
+        <ProjectsSummary projects={projects} />
+        {showNew && writer && <NewProjectForm onCreated={reloadProjects} onClose={() => setShowNew(false)} />}
+        <div className="pcard-grid">
+          {projects.map((p) => (
+            <ProjectCard
+              key={p.id}
+              p={p}
+              onOpen={() => setSelected(p.id)}
+              onDelete={writer && p.editable ? async () => { await deleteProject(p.id); reloadProjects(); } : undefined}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  } else if (view === "home") {
+    body = <HomeView onOpenProject={() => setView("projects")} onReview={() => { setView("review"); }} />;
+  } else if (view === "departments") {
+    body = <Depts onOpenAgent={() => { setView("overview"); setSelected(null); setSelectedAgent(null); }} />;
+  } else if (view === "hierarchy") {
+    body = <HierarchyFlow onOpenAgent={() => { setView("overview"); setSelected(null); setSelectedAgent(null); }} />;
+  } else if (view === "cost") {
+    body = <Cost />;
+  } else if (view === "audit") {
+    body = (
+      <Audit
+        agents={AGENTS}
+        actions={{
+          goReview: () => { setView("review"); setSelected(null); setSelectedAgent(null); },
+          goFleet: () => { setView("overview"); setSelected(null); setSelectedAgent(null); },
+          goCost: () => { setView("cost"); setSelected(null); setSelectedAgent(null); },
+          goDepts: () => { setView("departments"); setSelected(null); setSelectedAgent(null); },
+          goProjects: () => { setView("projects"); setSelected(null); setSelectedAgent(null); },
+          newAgent: () => { setView("projects"); setSelected(null); setShowNew(true); },
+        }}
+      />
+    );
+  } else {
+    body = <Overview agents={agents} onOpenAgent={setSelectedAgent} />;
+  }
 
   return (
     <>
       <Shell
-        title={
-          view === "hierarchy"
-            ? t("nav_hierarchy")
-            : view === "overview"
-            ? selectedAgent ? (selectedAgent.label ?? selectedAgent.agent) : t("nav_overview")
-            : selected && detail ? detail.name : t("nav_projects")
-        }
+        title={title}
+        me={me}
         view={view}
-        onNav={(v) => { setView(v as "projects" | "overview" | "hierarchy"); setSelected(null); setSelectedAgent(null); setShowNew(false); }}
-        role={role}
-        live={live}
+        onNav={(v) => { setView(v); setSelected(null); setSelectedAgent(null); setShowNew(false); }}
         theme={tweaks.dark ? "dark" : "light"}
         onToggleTheme={() => setTw({ dark: !tweaks.dark })}
-        counts={counts}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((c) => !c)}
         canNew={writer}
         onNew={() => { setView("projects"); setSelected(null); setShowNew(true); }}
         onLogout={logout}
         onCommand={() => setCmdOpen(true)}
-        onTweaks={() => setTweaksOpen(true)}
+        onBell={() => { setView("review"); setSelected(null); setSelectedAgent(null); }}
+        badge={REVIEW_BADGE}
       >
-        {view === "hierarchy" ? (
-          <Hierarchy
-            projects={projects}
-            onOpenProject={(id) => { setView("projects"); setSelected(id); }}
-            onOpenAgent={(a) => { setView("overview"); setSelectedAgent(a); }}
-          />
-        ) : view === "overview" ? (
-          selectedAgent ? (
-            <AgentDetail agent={selectedAgent} subtasks={[]} onBack={() => setSelectedAgent(null)} />
-          ) : (
-            <Overview agents={agents} onOpenAgent={setSelectedAgent} />
-          )
-        ) : selected && detail ? (
-          <ProjectDetailPanel
-            project={detail}
-            onBack={() => setSelected(null)}
-            canEdit={writer && detail.editable}
-            onStatus={writer && detail.editable ? async (status) => { await updateProject(detail.id, { status }); setSignal((s) => s + 1); } : undefined}
-            onRepo={writer && detail.editable ? async (repo) => { await updateProject(detail.id, { repo }); setSignal((s) => s + 1); } : undefined}
-            onDelete={writer && detail.editable ? async () => { await deleteProject(detail.id); setSelected(null); reloadProjects(); } : undefined}
-          />
-        ) : (
-          <div className="pj-page">
-            <ProjectsSummary projects={projects} />
-            {showNew && writer && <NewProjectForm onCreated={reloadProjects} onClose={() => setShowNew(false)} />}
-            <div className="pcard-grid">
-              {projects.map((p) => (
-                <ProjectCard
-                  key={p.id}
-                  p={p}
-                  onOpen={() => setSelected(p.id)}
-                  onDelete={writer && p.editable ? async () => { await deleteProject(p.id); reloadProjects(); } : undefined}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        {body}
       </Shell>
+      <Sentinel onOpenAgent={() => { setView("overview"); setSelected(null); setSelectedAgent(null); }} />
       <CommandPalette
         open={cmdOpen}
         onClose={() => setCmdOpen(false)}
@@ -270,6 +321,7 @@ export default function Home() {
           openProject: (id) => { setView("projects"); setSelected(id); },
           newProject: writer ? () => { setView("projects"); setSelected(null); setShowNew(true); } : undefined,
           toggleTheme: () => setTw({ dark: !tweaks.dark }),
+          openTweaks: () => setTweaksOpen(true),
           logout,
         }}
       />

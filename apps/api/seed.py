@@ -9,23 +9,32 @@ from apps.api.core.security import hash_password
 from apps.api.models import Project, ProjectStatus, User
 
 # Comptes de démo. Le 1er est le login par défaut de la plateforme.
+# (email, mot de passe, rôle, nom affiché, civilité mr|mrs|miss)
 SEED_USERS = [
-    ("demo@infinity.ae", "password", "admin"),
-    ("admin@mc.local", "admin", "admin"),
-    ("cto@mc.local", "cto", "cto"),
-    ("pm@mc.local", "pm", "pm"),
-    ("dev@mc.local", "developer", "developer"),
-    ("viewer@mc.local", "viewer", "viewer"),
+    ("demo@infinity.ae", "password", "admin", "Sultan", "mr"),
+    ("admin@mc.local", "admin", "admin", "Admin", "mr"),
+    ("cto@mc.local", "cto", "cto", "Mansouri", "mrs"),
+    ("pm@mc.local", "pm", "pm", "Karimi", "miss"),
+    ("dev@mc.local", "developer", "developer", "Haddad", "mr"),
+    ("viewer@mc.local", "viewer", "viewer", "Nadia", "miss"),
 ]
 
 
 def run() -> None:
     Session = get_sessionmaker()
     with Session() as db:
-        for email, pwd, role in SEED_USERS:
-            if not db.scalar(select(User).where(User.email == email)):
-                db.add(User(email=email, hashed_password=hash_password(pwd), role=role))
-                print(f"+ user {email} (rôle {role}, mdp: {pwd})")
+        for email, pwd, role, full_name, civility in SEED_USERS:
+            existing = db.scalar(select(User).where(User.email == email))
+            if not existing:
+                db.add(User(
+                    email=email, hashed_password=hash_password(pwd), role=role,
+                    full_name=full_name, civility=civility,
+                ))
+                print(f"+ user {email} (rôle {role}, {civility} {full_name}, mdp: {pwd})")
+            elif existing.full_name is None and existing.civility is None:
+                # Backfill profil pour les comptes seedés avant la migration 0004.
+                existing.full_name, existing.civility = full_name, civility
+                print(f"~ user {email} : profil ajouté ({civility} {full_name})")
         if not db.scalar(select(Project).where(Project.slug == "demo-crm")):
             db.add(
                 Project(

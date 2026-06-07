@@ -1,12 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 export type Lang = "fr" | "en" | "ar";
 
 const STR: Record<Lang, Record<string, string>> = {
   fr: {
-    nav_fleet: "Flotte", nav_projects: "Projets", nav_overview: "Vue d'ensemble", nav_hierarchy: "Hiérarchie", nav_audit: "Audit",
+    nav_fleet: "Flotte", nav_projects: "Projets", nav_overview: "Vue d'ensemble", nav_hierarchy: "Hiérarchie", nav_depts: "Départements", nav_audit: "Audit",
+    dp_other: "Sans module",
+    nav_home: "Accueil", nav_mission: "Mission Control", nav_cost: "Coûts & usage", nav_running: "En cours", nav_review: "À valider", nav_pending: "Tâches en attente", nav_queue: "File d'attente", nav_completed: "Terminés", nav_repos: "Dépôts", sec_mission: "MISSION CONTROL", sec_workspace: "ESPACE", brand_sub: "FLOTTE D'AGENTS",
+    hello: "Bonjour", civ_mr: "Mr", civ_mrs: "Mme", civ_miss: "Miss",
     new_project: "Nouveau projet", mini_active: "Actifs", mini_blocked: "Bloqués", mini_waiting: "En attente", logout: "Déconnexion",
     search_ph: "Rechercher un projet, un agent…", live: "live", polling: "polling",
     sum_projects: "Projets", sum_active: "Actifs", sum_review: "À revoir", sum_tasks: "Tâches", global_progress: "Avancement global",
@@ -29,12 +32,24 @@ const STR: Record<Lang, Record<string, string>> = {
     au_email: "Email", au_password: "Mot de passe", au_email_ph: "vous@exemple.com", au_pass_ph: "••••••••",
     au_remember: "Se souvenir de moi", au_forgot: "Mot de passe oublié ?", au_signin: "Se connecter",
     au_err_email: "Adresse email invalide.", au_err_pass: "6 caractères minimum.",
+    au_forgot_title: "Mot de passe oublié", au_forgot_sub: "Saisissez votre email : nous vous enverrons un lien de réinitialisation.",
+    au_forgot_send: "Envoyer le lien", au_back_login: "← Retour à la connexion",
+    au_sent: "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé.",
+    au_dev_token: "Mode démo (pas d'email configuré) — votre jeton :", au_use_token: "Utiliser ce jeton",
+    au_reset_title: "Nouveau mot de passe", au_reset_sub: "Collez le jeton reçu et choisissez un nouveau mot de passe.",
+    au_token: "Jeton de réinitialisation", au_token_ph: "Collez votre jeton ici",
+    au_newpass: "Nouveau mot de passe", au_newpass_ph: "Au moins 6 caractères",
+    au_reset_btn: "Réinitialiser le mot de passe", au_err_newpass: "6 caractères minimum.",
+    au_reset_ok: "Mot de passe réinitialisé. Vous pouvez vous connecter.",
     git_section: "Dépôt Git", git_repo: "Dépôt GitHub (owner/nom)", git_none: "Aucun dépôt lié.", git_unavail: "Dépôt indisponible.",
     git_commits: "Derniers commits", git_prs: "Pull requests ouvertes", git_branches_n: "branches", git_issues: "issues",
     lang: "Langue",
   },
   en: {
-    nav_fleet: "Fleet", nav_projects: "Projects", nav_overview: "Overview", nav_hierarchy: "Hierarchy", nav_audit: "Audit",
+    nav_fleet: "Fleet", nav_projects: "Projects", nav_overview: "Overview", nav_hierarchy: "Hierarchy", nav_depts: "Departments", nav_audit: "Audit",
+    dp_other: "No module",
+    nav_home: "Home", nav_mission: "Mission Control", nav_cost: "Cost & usage", nav_running: "Running", nav_review: "To review", nav_pending: "Pending tasks", nav_queue: "Queue", nav_completed: "Completed", nav_repos: "Repositories", sec_mission: "MISSION CONTROL", sec_workspace: "WORKSPACE", brand_sub: "AGENT FLEET",
+    hello: "Hello", civ_mr: "Mr", civ_mrs: "Mrs", civ_miss: "Miss",
     new_project: "New project", mini_active: "Active", mini_blocked: "Blocked", mini_waiting: "Queued", logout: "Sign out",
     search_ph: "Search a project, an agent…", live: "live", polling: "polling",
     sum_projects: "Projects", sum_active: "Active", sum_review: "Review", sum_tasks: "Tasks", global_progress: "Global progress",
@@ -57,12 +72,24 @@ const STR: Record<Lang, Record<string, string>> = {
     au_email: "Email", au_password: "Password", au_email_ph: "you@example.com", au_pass_ph: "••••••••",
     au_remember: "Remember me", au_forgot: "Forgot password?", au_signin: "Sign in",
     au_err_email: "Invalid email address.", au_err_pass: "6 characters minimum.",
+    au_forgot_title: "Forgot password", au_forgot_sub: "Enter your email and we'll send you a reset link.",
+    au_forgot_send: "Send reset link", au_back_login: "← Back to sign in",
+    au_sent: "If an account exists for this email, a reset link has been sent.",
+    au_dev_token: "Demo mode (no email configured) — your token:", au_use_token: "Use this token",
+    au_reset_title: "New password", au_reset_sub: "Paste the token you received and choose a new password.",
+    au_token: "Reset token", au_token_ph: "Paste your token here",
+    au_newpass: "New password", au_newpass_ph: "At least 6 characters",
+    au_reset_btn: "Reset password", au_err_newpass: "6 characters minimum.",
+    au_reset_ok: "Password reset. You can sign in now.",
     git_section: "Git repository", git_repo: "GitHub repo (owner/name)", git_none: "No repository linked.", git_unavail: "Repository unavailable.",
     git_commits: "Latest commits", git_prs: "Open pull requests", git_branches_n: "branches", git_issues: "issues",
     lang: "Language",
   },
   ar: {
-    nav_fleet: "الأسطول", nav_projects: "المشاريع", nav_overview: "نظرة عامة", nav_hierarchy: "التسلسل", nav_audit: "تدقيق",
+    nav_fleet: "الأسطول", nav_projects: "المشاريع", nav_overview: "نظرة عامة", nav_hierarchy: "التسلسل", nav_depts: "الأقسام", nav_audit: "تدقيق",
+    dp_other: "بدون وحدة",
+    nav_home: "الرئيسية", nav_mission: "مركز التحكم", nav_cost: "التكلفة والاستخدام", nav_running: "قيد التشغيل", nav_review: "للمراجعة", nav_pending: "مهام معلّقة", nav_queue: "قائمة الانتظار", nav_completed: "منجزة", nav_repos: "المستودعات", sec_mission: "مركز التحكم", sec_workspace: "مساحة العمل", brand_sub: "أسطول الوكلاء",
+    hello: "مرحبًا", civ_mr: "السيد", civ_mrs: "السيدة", civ_miss: "الآنسة",
     new_project: "مشروع جديد", mini_active: "نشِط", mini_blocked: "محظور", mini_waiting: "بالانتظار", logout: "تسجيل الخروج",
     search_ph: "ابحث عن مشروع أو وكيل…", live: "مباشر", polling: "استطلاع",
     sum_projects: "المشاريع", sum_active: "نشِط", sum_review: "للمراجعة", sum_tasks: "المهام", global_progress: "التقدم العام",
@@ -85,6 +112,15 @@ const STR: Record<Lang, Record<string, string>> = {
     au_email: "البريد الإلكتروني", au_password: "كلمة المرور", au_email_ph: "you@example.com", au_pass_ph: "••••••••",
     au_remember: "تذكّرني", au_forgot: "نسيت كلمة المرور؟", au_signin: "تسجيل الدخول",
     au_err_email: "بريد إلكتروني غير صالح.", au_err_pass: "6 أحرف على الأقل.",
+    au_forgot_title: "نسيت كلمة المرور", au_forgot_sub: "أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين.",
+    au_forgot_send: "إرسال رابط إعادة التعيين", au_back_login: "→ العودة إلى تسجيل الدخول",
+    au_sent: "إذا كان هناك حساب لهذا البريد، فقد تم إرسال رابط إعادة التعيين.",
+    au_dev_token: "وضع تجريبي (لا يوجد بريد مُعد) — رمزك:", au_use_token: "استخدام هذا الرمز",
+    au_reset_title: "كلمة مرور جديدة", au_reset_sub: "الصق الرمز الذي استلمته واختر كلمة مرور جديدة.",
+    au_token: "رمز إعادة التعيين", au_token_ph: "الصق رمزك هنا",
+    au_newpass: "كلمة المرور الجديدة", au_newpass_ph: "6 أحرف على الأقل",
+    au_reset_btn: "إعادة تعيين كلمة المرور", au_err_newpass: "6 أحرف على الأقل.",
+    au_reset_ok: "تمت إعادة تعيين كلمة المرور. يمكنك تسجيل الدخول الآن.",
     git_section: "مستودع Git", git_repo: "مستودع GitHub (owner/name)", git_none: "لا مستودع مرتبط.", git_unavail: "المستودع غير متاح.",
     git_commits: "آخر الالتزامات", git_prs: "طلبات السحب المفتوحة", git_branches_n: "فروع", git_issues: "مشاكل",
     lang: "اللغة",
@@ -96,13 +132,17 @@ const Ctx = createContext<I18n>({ lang: "fr", t: (k) => k, setLang: () => {} });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>("fr");
+  const hydrated = useRef(false);
+  // Lecture de la langue stockée au montage.
   useEffect(() => {
     const s = localStorage.getItem("mc-lang") as Lang | null;
     if (s && STR[s]) setLangState(s);
   }, []);
+  // Applique dir/lang ; ne PERSISTE qu'après le 1er rendu (sinon écrase la valeur stockée).
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    if (!hydrated.current) { hydrated.current = true; return; }
     localStorage.setItem("mc-lang", lang);
   }, [lang]);
   const t = useCallback((k: string) => STR[lang][k] ?? STR.fr[k] ?? k, [lang]);
