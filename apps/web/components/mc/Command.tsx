@@ -20,7 +20,6 @@ function fuzzy(q: string, text: string): number {
 
 type CmdItem = {
   id: string; label: string; group: "view" | "action" | "project" | "agent";
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon?: (p?: any) => JSX.Element; kw: string; run: () => void;
   sub?: string; clr?: string;
 };
