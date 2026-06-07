@@ -1,16 +1,19 @@
 // @ts-nocheck
 "use client";
 
-// HierarchyFlow.tsx — porté de mc-hierarchy.jsx.
-// Arbre top-down repliable des agents + tâches, avec arcs de workflow inter-agents.
-// Layout calculé analytiquement (aucune mesure DOM). Rendu statique sur données mock.
+// HierarchyFlow.tsx — vue hiérarchie/flux LIVE.
+// Arbre top-down repliable : orchestrateur → projets → agents → tâches.
+// Reconstruit dynamiquement depuis l'API (getProjects → getProject) dans un effet.
+// Layout calculé analytiquement (aucune mesure DOM). Les métriques non suivies
+// côté serveur (coût/tokens/modèle/flux inter-agents) sont dégradées proprement.
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@/components/mc/icons";
-import { Ant, antStateOf } from "@/components/mc/Ant";
+import { Ant } from "@/components/mc/Ant";
 import { Robot, robotRoleLabel, robotActivityOf } from "@/components/mc/Robot";
-import { AGENTS, TREE, EDGES, STATUS } from "@/lib/mc-data";
+import { getProjects, getProject } from "@/lib/api";
+import { bucketOf, fmtAge } from "@/lib/mc";
 import { useI18n } from "@/lib/i18n";
 
 const HI = Icon;
@@ -30,7 +33,10 @@ const TR = {
     sl_blocked: "Bloquée", sl_active: "Active", sl_done: "Réussie", sl_todo: "En file",
     dec_unblock: "Débloquer", dec_reassign: "Réassigner", dec_inspect: "Inspecter",
     dec_continue: "Continuer", dec_pause: "Mettre en pause", dec_prioritize: "Prioriser",
-    agents: "agents",
+    agents: "agents", fleet: "Flotte", projects: "projets", tasks: "tâches",
+    loading: "Chargement de la hiérarchie…",
+    empty: "Aucun projet ni agent à afficher pour le moment.",
+    flow_off: "Flux inter-agents indisponible (non suivi côté serveur).",
   },
   en: {
     agent: "Agent", task: "Task", workflow: "Workflow", active: "active", blocked: "blocked",
@@ -45,7 +51,10 @@ const TR = {
     sl_blocked: "Blocked", sl_active: "Active", sl_done: "Passed", sl_todo: "Queued",
     dec_unblock: "Unblock", dec_reassign: "Reassign", dec_inspect: "Inspect",
     dec_continue: "Continue", dec_pause: "Pause", dec_prioritize: "Prioritize",
-    agents: "agents",
+    agents: "agents", fleet: "Fleet", projects: "projects", tasks: "tasks",
+    loading: "Loading hierarchy…",
+    empty: "No project or agent to display yet.",
+    flow_off: "Inter-agent flow unavailable (not tracked server-side).",
   },
   ar: {
     agent: "وكيل", task: "مهمة", workflow: "سير العمل", active: "نشِط", blocked: "محظور",
@@ -60,7 +69,10 @@ const TR = {
     sl_blocked: "محظورة", sl_active: "نشطة", sl_done: "ناجحة", sl_todo: "في الطابور",
     dec_unblock: "إلغاء الحظر", dec_reassign: "إعادة التعيين", dec_inspect: "فحص",
     dec_continue: "متابعة", dec_pause: "إيقاف مؤقت", dec_prioritize: "إعطاء الأولوية",
-    agents: "وكلاء",
+    agents: "وكلاء", fleet: "الأسطول", projects: "مشاريع", tasks: "مهام",
+    loading: "جارٍ تحميل الهيكل…",
+    empty: "لا يوجد مشروع أو وكيل للعرض بعد.",
+    flow_off: "تدفق الوكلاء غير متاح (غير متتبَّع على الخادم).",
   },
 };
 
@@ -76,36 +88,105 @@ const ROW = 132; // vertical gap between depth levels
 
 const STCLR = { running: "var(--run)", waiting: "var(--wait)", blocked: "var(--block)", done: "var(--done)" };
 
-// build a unified tree from TREE spec + live agents
-function buildTree(spec, agentsById) {
-  function build(node) {
-    // worker reference
-    if (node.aid) {
-      const a = agentsById[node.aid];
-      const tasks = (a.steps || []).map((s, i) => ({
-        id: a.id + "__t" + i, type: "task", aid: a.id, sidx: i,
-        label: s.label,
-        state: s.done ? "done" : s.blocked ? "blocked" : s.active ? "active" : "todo",
+// Mappe l'état live d'un agent (idle|working|blocked|done|error|stale) vers
+// les 4 familles d'affichage du design (running|waiting|blocked|done).
+function liveStatus(state) {
+  return bucketOf(state || "idle");
+}
+
+// Mappe l'état live d'une tâche vers les 4 états de carte de tâche (done|active|blocked|todo).
+function liveTaskState(state) {
+  const b = bucketOf(state || "idle");
+  if (b === "done") return "done";
+  if (b === "blocked") return "blocked";
+  if (b === "running") return "active";
+  return "todo";
+}
+
+// Reconstruit l'arbre unifié à partir des projets/tâches/agents LIVE.
+// Structure : orchestrateur (flotte) → projet (lead) → agent (worker) → tâche.
+function buildLiveTree(projects, details, tt) {
+  const projNodes = projects.map((p) => {
+    const det = details[p.id];
+    // Agents live du projet (depuis le détail si dispo, sinon vide).
+    const detAgents = (det && det.agents) || [];
+    // Index tâche→agents : depuis les tâches du détail, on associe agents et sous-tâches.
+    const tasks = (det && det.tasks) || [];
+
+    // Carte clé agent → liste de tâches (cartes feuilles) où il intervient.
+    const tasksByAgent = {};
+    tasks.forEach((tk) => {
+      const involved = new Set();
+      (tk.agents || []).forEach((a) => involved.add(a.agent));
+      (tk.subtasks || []).forEach((s) => { if (s.agent) involved.add(s.agent); });
+      involved.forEach((key) => {
+        (tasksByAgent[key] = tasksByAgent[key] || []).push(tk);
+      });
+    });
+
+    const agentNodes = detAgents.map((a) => {
+      const myTasks = tasksByAgent[a.agent] || [];
+      const taskCards = myTasks.map((tk, i) => ({
+        id: p.id + "::" + a.agent + "::t" + i,
+        type: "task", aid: a.agent,
+        label: tk.title,
+        state: liveTaskState(tk.state),
+        agentRef: a,
       }));
+      // Repli : si aucune tâche associée, on dérive une carte unique depuis la tâche courante de l'agent.
+      if (taskCards.length === 0 && a.task) {
+        taskCards.push({
+          id: p.id + "::" + a.agent + "::t0",
+          type: "task", aid: a.agent,
+          label: a.task,
+          state: liveTaskState(a.state),
+          agentRef: a,
+        });
+      }
       return {
-        id: a.id, type: "agent", role: "worker", name: a.name, agent: a, status: a.status,
-        progress: a.progress, repo: a.repo, model: a.model, kids: tasks,
+        id: p.id + "::" + a.agent,
+        type: "agent", role: "worker",
+        name: a.label || a.agent,
+        agent: a,
+        status: liveStatus(a.state),
+        progress: a.progress || 0,
+        repo: a.module || a.branch || "—",
+        kids: taskCards,
       };
-    }
-    const kids = (node.children || []).map(build);
-    // aggregate status for structural agents
-    const descAgents = [];
-    (function collect(n) { (n.kids || []).forEach((k) => { if (k.type === "agent") { descAgents.push(k); collect(k); } }); })({ kids });
-    const anyBlocked = descAgents.some((d) => d.status === "blocked");
-    const anyRun = descAgents.some((d) => d.status === "running");
-    const status = anyBlocked ? "blocked" : anyRun ? "running" : "done";
-    const prog = descAgents.length ? Math.round(descAgents.reduce((s, d) => s + (d.progress || 0), 0) / descAgents.length) : 0;
+    });
+
+    // Statut agrégé du projet depuis ses compteurs/agents.
+    const anyBlocked = agentNodes.some((n) => n.status === "blocked") || (p.agents_blocked || 0) > 0;
+    const anyRun = agentNodes.some((n) => n.status === "running") || (p.agents_active || 0) > 0;
+    const status = anyBlocked ? "blocked" : anyRun ? "running" : p.status === "done" ? "done" : "running";
+
     return {
-      id: node.id, type: "agent", role: node.role, name: node.name, model: node.model,
-      repo: node.repo, note: node.note, status, progress: prog, count: descAgents.length, kids,
+      id: p.id,
+      type: "agent", role: "lead",
+      name: p.name,
+      status,
+      progress: p.progress || 0,
+      count: p.agents_total ?? agentNodes.length,
+      note: (p.tasks_done ?? 0) + "/" + (p.tasks_total ?? 0) + " " + tt("tasks"),
+      kids: agentNodes,
     };
-  }
-  return build(spec);
+  });
+
+  const totalAgents = projects.reduce((s, p) => s + (p.agents_total || 0), 0);
+  const anyBlocked = projNodes.some((n) => n.status === "blocked");
+  const anyRun = projNodes.some((n) => n.status === "running");
+
+  return {
+    id: "__fleet__",
+    type: "agent", role: "orchestrator",
+    name: tt("fleet"),
+    status: anyBlocked ? "blocked" : anyRun ? "running" : "done",
+    progress: projects.length
+      ? Math.round(projects.reduce((s, p) => s + (p.progress || 0), 0) / projects.length)
+      : 0,
+    note: projects.length + " " + tt("projects") + " · " + totalAgents + " " + tt("agents"),
+    kids: projNodes,
+  };
 }
 
 // assign x/y positions respecting collapsed set
@@ -137,11 +218,6 @@ function vpath(a, b) { // parent bottom -> child top (cubic S)
   const x1 = a.x, y1 = a.y + a.h, x2 = b.x, y2 = b.y, my = (y1 + y2) / 2;
   return `M${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`;
 }
-function flowPath(a, b) { // workflow arc dipping below the row
-  const x1 = a.x, y1 = a.y + a.h, x2 = b.x, y2 = b.y + b.h;
-  const dip = Math.max(y1, y2) + 56 + Math.abs(x2 - x1) * 0.04;
-  return `M${x1} ${y1} C ${x1} ${dip}, ${x2} ${dip}, ${x2} ${y2}`;
-}
 
 // hook de drag partagé : déplacement à la souris via pointer events, distingue clic vs glisser.
 function useNodeDrag(id, zoom, onDrag) {
@@ -170,7 +246,7 @@ function useNodeDrag(id, zoom, onDrag) {
   return { onPointerDown, onPointerMove, onPointerUp, guardClick };
 }
 
-function HNode({ n, onToggle, onOpen, paused, onTaskClick, zoom, onDrag }) {
+function HNode({ n, onToggle, onOpen, onTaskClick, zoom, onDrag }) {
   const { lang } = useI18n();
   const tt = (k) => (TR[lang] || TR.en)[k] ?? (TR.en[k] ?? k);
   const clr = STCLR[n.status] || "var(--tx-dim)";
@@ -191,29 +267,30 @@ function HNode({ n, onToggle, onOpen, paused, onTaskClick, zoom, onDrag }) {
     );
   }
   const isWorker = n.role === "worker";
-  const botRole = n.agent ? (n.agent.role || "developer") : n.role;
+  // Rôle d'affichage du robot : pour un agent live, on retombe sur "developer".
+  const botRole = isWorker ? "developer" : n.role;
   return (
     <div
       className={"h-node " + n.role + (isWorker && n.status === "running" ? " run-anim" : "")}
       style={{ left: n.x - n.w / 2, top: n.y, width: n.w, height: n.h, "--clr": clr, ...dragStyle }}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-      onClick={guardClick(() => isWorker && onOpen(n.agent))}
+      onClick={guardClick(() => isWorker && n.agent && onOpen(n.agent))}
     >
       <div className="h-hex bot" style={{ color: clr }}>
         <Robot
           role={botRole}
           color={clr}
           size={n.role === "orchestrator" ? 46 : 38}
-          status={n.agent ? n.agent.status : "running"}
-          paused={n.agent ? (paused && paused.has(n.agent.id)) : false}
-          activity={n.agent ? robotActivityOf(n.agent) : "thinking"}
+          status={isWorker ? "running" : "running"}
+          paused={false}
+          activity={n.agent ? robotActivityOf({ task: n.agent.task, step: n.agent.label }) : "thinking"}
         />
         <span className="h-ring"></span>
       </div>
       <div className="h-body">
         <div className="h-name">{n.name}</div>
         <div className="h-sub">
-          {n.agent ? <>{robotRoleLabel(n.agent.role)} · {n.repo}</>
+          {isWorker ? <>{robotRoleLabel("developer")} · {n.repo}{n.agent && n.agent.age_seconds != null ? " · " + fmtAge(n.agent.age_seconds) : ""}</>
             : n.role === "lead" ? <>{robotRoleLabel("lead")} · {n.count} {tt("agents")}</>
             : <>{robotRoleLabel("orchestrator")} · {n.note}</>}
         </div>
@@ -266,7 +343,7 @@ function TaskModal({ n, agent, onClose, onOpen }) {
           <span className="tm-ant" style={{ color: clr }}><Ant state={TSTATE[n.state] || "sleeping"} color={clr} size={36} /></span>
           <div className="tm-id">
             <div className="tm-t">{label}</div>
-            {agent && <div className="tm-sub">{agent.name} · {robotRoleLabel(agent.role)} · {agent.repo}</div>}
+            {agent && <div className="tm-sub">{agent.label || agent.agent} · {robotRoleLabel("developer")} · {agent.module || agent.branch || "—"}</div>}
           </div>
           <button className="btn ghost icon" onClick={onClose}>{HI.x({})}</button>
         </div>
@@ -298,17 +375,67 @@ function TaskModal({ n, agent, onClose, onOpen }) {
 export function HierarchyFlow({ onOpenAgent = () => {} }) {
   const { lang } = useI18n();
   const t = (k) => (TR[lang] || TR.en)[k] ?? (TR.en[k] ?? k);
-  const agents = AGENTS;
   const onOpen = onOpenAgent;
-  const paused = null;
-  const agentsById = useMemo(() => Object.fromEntries(agents.map((a) => [a.id, a])), [agents]);
+
+  // --- Données LIVE : projets + détails (tâches/agents) reconstruits en hiérarchie. ---
+  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState([]);
+  const [details, setDetails] = useState({});
+  // Index agent (clé) → objet agent live, pour la modale de tâche.
+  const agentsByKey = useMemo(() => {
+    const m = {};
+    Object.values(details).forEach((d) => (d.agents || []).forEach((a) => { m[a.agent] = a; }));
+    return m;
+  }, [details]);
+
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const ps = await getProjects();
+        if (!on) return;
+        setProjects(ps);
+        // Récupère les détails de chaque projet en parallèle (tâches + agents).
+        const entries = await Promise.all(
+          ps.map(async (p) => {
+            try { return [p.id, await getProject(p.id)]; }
+            catch { return [p.id, null]; }
+          })
+        );
+        if (!on) return;
+        const map = {};
+        entries.forEach(([id, det]) => { if (det) map[id] = det; });
+        setDetails(map);
+      } catch {
+        if (on) { setProjects([]); setDetails({}); }
+      } finally {
+        if (on) setLoading(false);
+      }
+    })();
+    return () => { on = false; };
+  }, []);
+
   const [taskNode, setTaskNode] = useState(null);
-  const tree = useMemo(() => buildTree(TREE, agentsById), [agentsById]);
-  // default: structure expanded, tasks collapsed
-  const allTaskParents = useMemo(() => agents.map((a) => a.id), [agents]);
-  const [collapsed, setCollapsed] = useState(() => new Set(allTaskParents));
+  const tree = useMemo(() => buildLiveTree(projects, details, t), [projects, details, lang]);
+
+  // Parents repliés par défaut : tous les agents (les tâches sont masquées au départ).
+  const allAgentIds = useMemo(() => {
+    const ids = [];
+    projects.forEach((p) => {
+      const det = details[p.id];
+      (det && det.agents || []).forEach((a) => ids.push(p.id + "::" + a.agent));
+    });
+    return ids;
+  }, [projects, details]);
+  const projectIds = useMemo(() => projects.map((p) => p.id), [projects]);
+
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  // Réinitialise le repli quand la flotte change : on masque les tâches par défaut.
+  useEffect(() => { setCollapsed(new Set(allAgentIds)); }, [allAgentIds.join("|")]);
+
   const [zoom, setZoom] = useState(0.78);
-  const [showFlow, setShowFlow] = useState(true);
+  // NB : le flux inter-agents (EDGES) du mock n'est pas suivi côté serveur — vue dégradée
+  // sans arcs de workflow ni étiquettes de flux (la légende/bouton "Flux" sont retirés).
   // décalages de position par nœud (drag à la souris), appliqués par-dessus le layout calculé
   const [offsets, setOffsets] = useState({});
   const onDrag = useCallback((id, ddx, ddy) => {
@@ -318,10 +445,10 @@ export function HierarchyFlow({ onOpenAgent = () => {} }) {
   useEffect(() => {
     const c = canvasRef.current;
     if (c) c.scrollLeft = Math.max(0, (c.scrollWidth - c.clientWidth) / 2);
-  }, []);
+  }, [tree]);
 
   const L = useMemo(() => layout(tree, collapsed), [tree, collapsed]);
-  // applique les décalages de drag aux positions calculées (nœuds + index pour les liens/flux)
+  // applique les décalages de drag aux positions calculées (nœuds + index pour les liens)
   const nodes2 = useMemo(
     () => L.nodes.map((n) => { const o = offsets[n.id]; return o ? { ...n, x: n.x + o.dx, y: n.y + o.dy } : n; }),
     [L, offsets]
@@ -329,11 +456,9 @@ export function HierarchyFlow({ onOpenAgent = () => {} }) {
   const byId2 = useMemo(() => { const m = {}; nodes2.forEach((n) => (m[n.id] = n)); return m; }, [nodes2]);
   const toggle = (id) => setCollapsed((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const expandAll = () => setCollapsed(new Set());
-  const collapseAll = () => setCollapsed(new Set([...allTaskParents, "lead-be", "lead-fe", "lead-qa"]));
+  const collapseAll = () => setCollapsed(new Set([...allAgentIds, ...projectIds]));
 
-  const flows = showFlow ? EDGES
-    .map((e) => ({ ...e, a: byId2[e.from], b: byId2[e.to] }))
-    .filter((e) => e.a && e.b) : [];
+  const isEmpty = !loading && projects.length === 0;
 
   return (
     <div className="h-wrap">
@@ -341,12 +466,10 @@ export function HierarchyFlow({ onOpenAgent = () => {} }) {
         <div className="h-legend">
           <span className="lg"><span className="lg-hex"></span>{t("agent")}</span>
           <span className="lg"><span className="lg-tag"></span>{t("task")}</span>
-          <span className="lg"><span className="lg-line flow"></span>{t("workflow")}</span>
           <span className="lg"><span className="dot" style={{ background: "var(--run)" }}></span>{t("active")}</span>
           <span className="lg"><span className="dot" style={{ background: "var(--block)" }}></span>{t("blocked")}</span>
         </div>
         <div className="h-tools">
-          <button className={"chip" + (showFlow ? " active" : "")} onClick={() => setShowFlow((s) => !s)}>{HI.pr({ style: { width: 13, height: 13 } })} {t("flow")}</button>
           <button className="chip" onClick={expandAll}>{t("expand_all")}</button>
           <button className="chip" onClick={collapseAll}>{t("collapse_all")}</button>
           {Object.keys(offsets).length > 0 && <button className="chip" onClick={() => setOffsets({})}>{t("reset_pos")}</button>}
@@ -358,39 +481,33 @@ export function HierarchyFlow({ onOpenAgent = () => {} }) {
         </div>
       </div>
 
-      <div className="h-canvas" ref={canvasRef}>
-        <div className="h-stage" style={{ width: L.W * zoom, height: L.H * zoom }}>
-          <div className="h-inner" style={{ width: L.W, height: L.H, transform: `scale(${zoom})` }}>
-            <svg className="h-links" width={L.W} height={L.H} viewBox={`0 0 ${L.W} ${L.H}`}>
-              <defs>
-                <marker id="ah" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">
-                  <path d="M1 1 L7 4.5 L1 8" fill="none" stroke="var(--accent)" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                </marker>
-              </defs>
-              {L.links.map((lk, i) => {
-                const a = byId2[lk.from], b = byId2[lk.to];
-                if (!a || !b) return null;
-                return <path key={i} d={vpath(a, b)} className="lk" />;
-              })}
-              {flows.map((e, i) => (
-                <g key={"f" + i} className="flow-edge">
-                  <path d={flowPath(e.a, e.b)} className="lk-flow" markerEnd="url(#ah)" />
-                </g>
+      {loading ? (
+        <div className="h-canvas" style={{ display: "grid", placeItems: "center" }}>
+          <div className="muted" style={{ padding: 40, fontSize: 13 }}>{t("loading")}</div>
+        </div>
+      ) : isEmpty ? (
+        <div className="h-canvas" style={{ display: "grid", placeItems: "center" }}>
+          <div className="muted" style={{ padding: 40, fontSize: 13 }}>{t("empty")}</div>
+        </div>
+      ) : (
+        <div className="h-canvas" ref={canvasRef}>
+          <div className="h-stage" style={{ width: L.W * zoom, height: L.H * zoom }}>
+            <div className="h-inner" style={{ width: L.W, height: L.H, transform: `scale(${zoom})` }}>
+              <svg className="h-links" width={L.W} height={L.H} viewBox={`0 0 ${L.W} ${L.H}`}>
+                {L.links.map((lk, i) => {
+                  const a = byId2[lk.from], b = byId2[lk.to];
+                  if (!a || !b) return null;
+                  return <path key={i} d={vpath(a, b)} className="lk" />;
+                })}
+              </svg>
+              {nodes2.map((n) => (
+                <HNode key={n.id} n={n} onToggle={toggle} onOpen={onOpen} onTaskClick={setTaskNode} zoom={zoom} onDrag={onDrag} />
               ))}
-            </svg>
-            {flows.map((e, i) => {
-              const x1 = e.a.x, y1 = e.a.y + e.a.h, x2 = e.b.x, y2 = e.b.y + e.b.h;
-              const dip = Math.max(y1, y2) + 56 + Math.abs(x2 - x1) * 0.04;
-              const mx = (x1 + x2) / 2, my = dip * 0.75 + ((y1 + y2) / 2) * 0.25;
-              return <div key={"fl" + i} className="flow-label" style={{ left: mx, top: my }}>{e.label}</div>;
-            })}
-            {nodes2.map((n) => (
-              <HNode key={n.id} n={n} onToggle={toggle} onOpen={onOpen} paused={paused} onTaskClick={setTaskNode} zoom={zoom} onDrag={onDrag} />
-            ))}
+            </div>
           </div>
         </div>
-      </div>
-      {taskNode && <TaskModal n={taskNode} agent={agentsById[taskNode.aid]} onClose={() => setTaskNode(null)} onOpen={onOpen} />}
+      )}
+      {taskNode && <TaskModal n={taskNode} agent={agentsByKey[taskNode.aid]} onClose={() => setTaskNode(null)} onOpen={onOpen} />}
     </div>
   );
 }

@@ -1,11 +1,23 @@
 // @ts-nocheck
 "use client";
-import { AGENTS, STATUS, fmtCost } from "@/lib/mc-data";
+import { useEffect, useState } from "react";
+import {
+  getAgents,
+  getProjects,
+  type Agent,
+  type ProjectSummary,
+} from "@/lib/api";
+import {
+  statusOf,
+  healthFrom,
+  HEALTH_META,
+  HEALTH_ORDER,
+  bucketOf,
+  completionColor,
+} from "@/lib/mc";
 import { Icon } from "@/components/mc/icons";
-import { Ant, antStateOf } from "@/components/mc/Ant";
+import { Ant } from "@/components/mc/Ant";
 import { useI18n } from "@/lib/i18n";
-
-const HORD = ["blocked", "running", "waiting", "done"];
 
 const TR = {
   fr: {
@@ -28,6 +40,9 @@ const TR = {
     agents: "agents",
     agent: "agent",
     n_to_review: "à valider",
+    cost_na: "Non suivi côté serveur",
+    no_agents: "Aucun agent actif",
+    no_projects: "Aucun projet",
   },
   en: {
     mission_control: "Mission Control",
@@ -49,6 +64,9 @@ const TR = {
     agents: "agents",
     agent: "agent",
     n_to_review: "to review",
+    cost_na: "Non suivi côté serveur",
+    no_agents: "Aucun agent actif",
+    no_projects: "Aucun projet",
   },
   ar: {
     mission_control: "مركز التحكم",
@@ -70,48 +88,48 @@ const TR = {
     agents: "وكلاء",
     agent: "وكيل",
     n_to_review: "للمراجعة",
+    cost_na: "Non suivi côté serveur",
+    no_agents: "Aucun agent actif",
+    no_projects: "Aucun projet",
   },
 };
 
 function hueFor(p) {
-  const t = Math.max(0, Math.min(1, p));
-  return `hsl(${(4 + 138 * t).toFixed(0)} 64% 52%)`;
+  return completionColor(Math.max(0, Math.min(1, p)));
 }
 
 export function Home({ onOpen = () => {}, onReview = () => {}, onOpenProject = () => {} }) {
   const { lang } = useI18n();
   const t = (k) => (TR[lang] || TR.en)[k] ?? (TR.en[k] ?? k);
-  const agents = AGENTS;
 
-  const counts = { running: 0, waiting: 0, blocked: 0, done: 0 };
-  agents.forEach((a) => {
-    counts[a.status] = (counts[a.status] || 0) + 1;
-  });
-  const totalTasks = agents.reduce((s, a) => s + (a.steps || []).length, 0);
-  const doneTasks = agents.reduce(
-    (s, a) => s + (a.steps || []).filter((t) => t.done).length,
-    0
-  );
-  const globalPct = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
-  const blocked = agents.filter((a) => a.status === "blocked");
-  const totalCost = agents.reduce((s, a) => s + (a.cost || 0), 0);
+  // Self-fetch des données live.
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [projects, setProjects] = useState<ProjectSummary[]>([]);
+  useEffect(() => {
+    let on = true;
+    getAgents()
+      .then((a) => on && setAgents(a))
+      .catch(() => {});
+    getProjects()
+      .then((p) => on && setProjects(p))
+      .catch(() => {});
+    return () => {
+      on = false;
+    };
+  }, []);
 
-  // projects by completion (most at risk first)
-  const groups = {};
-  agents.forEach((a) => {
-    (groups[a.repo] = groups[a.repo] || []).push(a);
-  });
-  const projects = Object.entries(groups)
-    .map(([repo, items]) => {
-      const td = items.reduce(
-        (s, a) => s + (a.steps || []).filter((t) => t.done).length,
-        0
-      );
-      const tt = items.reduce((s, a) => s + (a.steps || []).length, 0);
-      const bl = items.filter((a) => a.status === "blocked").length;
-      return { repo, items, pct: tt ? Math.round((td / tt) * 100) : 0, bl };
-    })
-    .sort((a, b) => b.bl - a.bl || a.pct - b.pct)
+  // Compteurs de santé dérivés des états live.
+  const counts = healthFrom(agents);
+  // Avancement global = moyenne des progress live des agents (0-100).
+  const globalPct = agents.length
+    ? Math.round(agents.reduce((s, a) => s + (a.progress || 0), 0) / agents.length)
+    : 0;
+  // Agents à valider = bloqués/en erreur.
+  const blocked = agents.filter((a) => bucketOf(a.state) === "blocked");
+
+  // Projets à risque : bloqués d'abord, puis avancement le plus faible.
+  const riskProjects = [...projects]
+    .sort((a, b) => (b.agents_blocked || 0) - (a.agents_blocked || 0) || a.progress - b.progress)
     .slice(0, 4);
 
   return (
@@ -141,8 +159,9 @@ export function Home({ onOpen = () => {}, onReview = () => {}, onOpenProject = (
               {Icon.alert({})} {t("to_review")}
             </div>
           </button>
-          <div className="hk">
-            <div className="hk-v num">{fmtCost(totalCost)}</div>
+          {/* Coût non suivi côté serveur — dégradé en "—". */}
+          <div className="hk" title={t("cost_na")}>
+            <div className="hk-v num">—</div>
             <div className="hk-k">
               {Icon.coin({})} {t("cost_today")}
             </div>
@@ -165,21 +184,21 @@ export function Home({ onOpen = () => {}, onReview = () => {}, onOpenProject = (
       <div className="home-health">
         <div className="hh-label">{t("fleet_health")}</div>
         <div className="hh-bar">
-          {HORD.map((k) =>
+          {HEALTH_ORDER.map((k) =>
             counts[k] ? (
               <i
                 key={k}
-                style={{ flex: counts[k], background: STATUS[k].clr }}
+                style={{ flex: counts[k], background: HEALTH_META[k].clr }}
                 title={counts[k] + " " + t(k)}
               ></i>
             ) : null
           )}
         </div>
         <div className="hh-legend">
-          {HORD.map((k) =>
+          {HEALTH_ORDER.map((k) =>
             counts[k] ? (
               <span key={k}>
-                <span className="d" style={{ background: STATUS[k].clr }}></span>
+                <span className="d" style={{ background: HEALTH_META[k].clr }}></span>
                 {counts[k]} {t(k)}
               </span>
             ) : null
@@ -205,15 +224,13 @@ export function Home({ onOpen = () => {}, onReview = () => {}, onOpenProject = (
               </div>
             )}
             {blocked.map((a) => (
-              <button className="hrow" key={a.id} onClick={() => onReview(a)}>
-                <span className="hrow-ic" style={{ color: STATUS.blocked.clr }}>
-                  <Ant state="searching" color={STATUS.blocked.clr} size={26} />
+              <button className="hrow" key={a.agent} onClick={() => onReview(a)}>
+                <span className="hrow-ic" style={{ color: statusOf(a.state).clr }}>
+                  <Ant state="searching" color={statusOf(a.state).clr} size={26} />
                 </span>
                 <span className="hrow-txt">
-                  <span className="hrow-n">{a.name}</span>
-                  <span className="hrow-s">
-                    {a.pendingAction ? a.pendingAction.title : a.repo}
-                  </span>
+                  <span className="hrow-n">{a.label || a.agent}</span>
+                  <span className="hrow-s">{a.blocker || a.task || a.module || "—"}</span>
                 </span>
                 <span className="hrow-cta">
                   {t("examine")} {Icon.chevron({})}
@@ -231,52 +248,56 @@ export function Home({ onOpen = () => {}, onReview = () => {}, onOpenProject = (
             </button>
           </div>
           <div className="hc-body">
-            {projects.map((p) => (
-              <button
-                className="hrow"
-                key={p.repo}
-                onClick={() => onOpenProject(p.repo)}
-              >
-                <span
-                  className="hrow-ring"
-                  style={{ "--hue": hueFor(p.pct / 100) }}
-                >
-                  <svg width="34" height="34" viewBox="0 0 34 34">
-                    <circle
-                      cx="17"
-                      cy="17"
-                      r="13"
-                      fill="none"
-                      stroke="var(--bg-3)"
-                      strokeWidth="3.5"
-                    />
-                    <circle
-                      cx="17"
-                      cy="17"
-                      r="13"
-                      fill="none"
-                      stroke="var(--hue)"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      strokeDasharray={2 * Math.PI * 13}
-                      strokeDashoffset={2 * Math.PI * 13 * (1 - p.pct / 100)}
-                      transform="rotate(-90 17 17)"
-                    />
-                  </svg>
-                  <b className="num" style={{ color: "var(--hue)" }}>
-                    {p.pct}
-                  </b>
-                </span>
-                <span className="hrow-txt">
-                  <span className="hrow-n">{p.repo}</span>
-                  <span className="hrow-s">
-                    {p.items.length} {p.items.length > 1 ? t("agents") : t("agent")}
-                    {p.bl ? " · " + p.bl + " " + t("n_to_review") : ""}
+            {riskProjects.length === 0 && (
+              <div className="hc-empty">
+                {Icon.folder({})}
+                <span>{t("no_projects")}</span>
+              </div>
+            )}
+            {riskProjects.map((p) => {
+              const pct = Math.round(p.progress || 0);
+              const bl = p.agents_blocked || 0;
+              const nb = p.agents_total || 0;
+              return (
+                <button className="hrow" key={p.id} onClick={() => onOpenProject(p.id)}>
+                  <span className="hrow-ring" style={{ "--hue": hueFor(pct / 100) }}>
+                    <svg width="34" height="34" viewBox="0 0 34 34">
+                      <circle
+                        cx="17"
+                        cy="17"
+                        r="13"
+                        fill="none"
+                        stroke="var(--bg-3)"
+                        strokeWidth="3.5"
+                      />
+                      <circle
+                        cx="17"
+                        cy="17"
+                        r="13"
+                        fill="none"
+                        stroke="var(--hue)"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeDasharray={2 * Math.PI * 13}
+                        strokeDashoffset={2 * Math.PI * 13 * (1 - pct / 100)}
+                        transform="rotate(-90 17 17)"
+                      />
+                    </svg>
+                    <b className="num" style={{ color: "var(--hue)" }}>
+                      {pct}
+                    </b>
                   </span>
-                </span>
-                {p.bl > 0 && <span className="hrow-flag">{Icon.alert({})}</span>}
-              </button>
-            ))}
+                  <span className="hrow-txt">
+                    <span className="hrow-n">{p.name}</span>
+                    <span className="hrow-s">
+                      {nb} {nb > 1 ? t("agents") : t("agent")}
+                      {bl ? " · " + bl + " " + t("n_to_review") : ""}
+                    </span>
+                  </span>
+                  {bl > 0 && <span className="hrow-flag">{Icon.alert({})}</span>}
+                </button>
+              );
+            })}
           </div>
         </section>
       </div>

@@ -101,6 +101,8 @@ export function Cost({ agents = AGENTS, totalCost = 0 }) {
 
   return (
     <div className="cost">
+      {/* Vue encore alimentée par des données mock (coût/usage non suivis côté serveur). */}
+      <span className="demo-pill" title="Données de démonstration — non câblées sur le backend">● Données de démonstration</span>
       <div className="cost-kpis">
         <div className="ck"><div className="ck-k">{Icon.coin({})} {tt("cost_per_day")}</div><div className="ck-v num">{fmtCost(totalCost || totalAll)}</div></div>
         <div className="ck"><div className="ck-k">{Icon.coin({})} {tt("total_cost")}</div><div className="ck-v num">{fmtCost(totalAll)}</div></div>
