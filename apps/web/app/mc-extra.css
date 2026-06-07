@@ -103,12 +103,249 @@
 .git-repo a:hover { color:var(--accent); }
 .git-chip { font-size:11.5px; color:var(--tx-mid); background:var(--bg-3); border:1px solid var(--border); border-radius:999px; padding:3px 9px; display:inline-flex; gap:5px; align-items:center; }
 .git-cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.git-cols > div { min-width:0; }   /* colonnes rétrécissables → l'ellipse des lignes peut agir */
 @media (max-width:760px){ .git-cols{ grid-template-columns:1fr; } }
 .git-sub { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--tx-dim); font-weight:600; margin-bottom:7px; }
 .git-commit { display:flex; gap:9px; align-items:baseline; padding:4px 0; font-size:12.5px; border-bottom:1px solid var(--border-soft); }
 .git-commit .sha { font-family:var(--mono); color:var(--accent); flex:none; }
-.git-commit .msg { color:var(--tx-mid); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.git-commit .msg { color:var(--tx-mid); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .git-pr { display:flex; gap:8px; align-items:baseline; padding:4px 0; font-size:12.5px; }
 .git-pr .n { font-family:var(--mono); color:var(--done); flex:none; }
-.git-pr .ti { color:var(--tx-mid); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.git-pr .ti { color:var(--tx-mid); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .git-empty { color:var(--tx-lo); font-size:12.5px; }
+
+/* ===== Vue Départements (groupes par module) ===== */
+.dept-grid { display:flex; flex-direction:column; gap:16px; }
+.dept { border:1px solid var(--border-soft); background:var(--bg-2); border-radius:var(--r-lg); padding:16px; }
+.dept-h { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+.dept-glyph { width:36px; height:36px; border-radius:9px; display:grid; place-items:center; font-family:var(--mono); font-size:11px; font-weight:700; color:#fff; flex:none; }
+.dept-h .nm { font-weight:600; color:var(--tx-hi); }
+.dept-h .ds { font-size:11.5px; color:var(--tx-lo); }
+.dept-h .grow { flex:1; }
+.dept-h .pct { font-family:var(--mono); font-weight:600; }
+.dept-bar { height:6px; border-radius:4px; background:var(--bg-3); overflow:hidden; display:flex; margin-bottom:12px; }
+.dept-bar i { height:100%; }
+.dept-agents { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:10px; }
+.dagent { display:flex; align-items:center; gap:10px; padding:9px 11px; border:1px solid var(--border-soft); border-radius:var(--r-md); background:var(--bg-1); cursor:pointer; transition:background .12s; }
+.dagent:hover { background:var(--bg-hover); }
+.dagent .di { min-width:0; flex:1; }
+.dagent .nm { font-weight:500; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.dagent .bar { height:4px; border-radius:3px; background:var(--bg-3); overflow:hidden; margin-top:5px; }
+.dagent .bar i { display:block; height:100%; }
+
+/* ===== Sidebar repliable (ouverture/fermeture) ===== */
+.app.nav-collapsed { grid-template-columns: 68px 1fr; }
+.app.nav-collapsed .sidebar { padding: 18px 10px; align-items: stretch; }
+.app.nav-collapsed .sidebar .nav-item { justify-content: center; padding: 10px 0; }
+.app.nav-collapsed .sidebar .nav-item > span:not(.count) { display: none; }
+.app.nav-collapsed .sidebar .nav-item .count { display: none; }
+.app.nav-collapsed .nav-label { text-align: center; font-size: 8px; padding: 12px 0 5px; }
+.app.nav-collapsed .brand .name, .app.nav-collapsed .brand .sub { display: none; }
+.app.nav-collapsed .brand { justify-content: center; padding: 6px 0 16px; }
+.app.nav-collapsed .btn.primary span { display: none; }
+.app.nav-collapsed .btn.primary { padding: 9px 0; }
+.app.nav-collapsed .fleet-mini { display: none; }
+[dir="rtl"] .app.nav-collapsed { grid-template-columns: 1fr 68px; }
+@media (max-width: 860px) { .app.nav-collapsed { grid-template-columns: 0 1fr; } .app.nav-collapsed .sidebar { display: none; } }
+
+/* ===== Sidebar : zone nav scrollable, Déconnexion épinglée en bas ===== */
+.sidebar { overflow: hidden; }
+.sidebar-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.sidebar-scroll::-webkit-scrollbar { width: 8px; }
+.sidebar .logout-item { flex: none; margin-top: 6px; border-top: 1px solid var(--border-soft); padding-top: 12px; }
+
+/* ===== Topbar : cluster d'actions à droite (fidèle au design) ===== */
+/* Topbar robuste : la recherche absorbe la compression, les actions ne débordent jamais. */
+.topbar { min-width: 0; }
+.topbar h1 { flex: none; }
+.topbar .search { margin-inline-start: auto; flex: 0 1 230px; min-width: 0; width: auto; }
+.topbar .search input { min-width: 0; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; margin-inline-start: 8px; }
+.notif-btn { position: relative; }
+.notif-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: var(--block); color: #fff; font-size: 10px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.topbar .lang-switch { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-2); }
+.topbar .lang-switch .ls { appearance: none; border: 0; background: transparent; color: var(--tx-mid); font: inherit; font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; cursor: pointer; }
+.topbar .lang-switch .ls.on { background: var(--accent); color: #fff; }
+.topbar .btn.primary { white-space: nowrap; }
+@media (max-width: 1000px) {
+  .topbar .search { display: none; }
+  .topbar-actions { margin-inline-start: auto; }
+}
+
+/* ===== Audit : label "Compliance" sous l'anneau, lisible ===== */
+.au-score-k { color: var(--tx-hi); font-weight: 700; opacity: .92; letter-spacing: .12em; margin-top: -12px; text-align: center; }
+[data-theme="light"] .au-score-k { color: var(--tx-mid); }
+
+/* ===== Logo HP Holding — affichage créatif (halo doré + shimmer + animation) ===== */
+:root { --gold: #c09c54; --gold-lite: #e3c886; }
+
+/* ===== Message d'accueil utilisateur (sous le logo) ===== */
+.user-greet {
+  display: flex; align-items: center; gap: 8px; margin: 2px 4px 10px;
+  padding: 9px 11px; border-radius: var(--r-sm);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--gold) 14%, transparent), transparent);
+  border: 1px solid color-mix(in oklab, var(--gold) 28%, transparent);
+  font-size: 13px; font-weight: 600; color: var(--tx-hi);
+  overflow: hidden; white-space: nowrap;
+}
+.user-greet-ic { display: grid; place-items: center; color: var(--gold); flex: none; }
+.user-greet-ic svg { width: 15px; height: 15px; }
+.user-greet-txt { overflow: hidden; text-overflow: ellipsis; }
+/* En mode sidebar repliée, on masque le texte (l'icône suffit). */
+.nav-collapsed .user-greet { justify-content: center; padding: 9px 0; }
+.nav-collapsed .user-greet-txt { display: none; }
+
+/* -- Sidebar : monogramme dans une tuile vivante -- */
+.brand .logo.brand-img {
+  background:
+    radial-gradient(circle at 50% 32%, color-mix(in oklab, var(--gold) 30%, transparent), transparent 72%),
+    linear-gradient(158deg, #26242c, #141318) !important;
+  border: 1px solid color-mix(in oklab, var(--gold) 42%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--gold) 22%, transparent),
+    0 4px 14px -6px color-mix(in oklab, var(--gold) 55%, transparent),
+    0 0 0 0 color-mix(in oklab, var(--gold) 40%, transparent);
+  position: relative; overflow: hidden;
+  transition: transform .28s cubic-bezier(.34,1.56,.64,1), box-shadow .28s ease;
+  animation: logoBreath 4.5s ease-in-out infinite;
+}
+.brand:hover .logo.brand-img {
+  transform: translateY(-1px) scale(1.06) rotate(-1deg);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--gold) 30%, transparent),
+    0 6px 20px -6px color-mix(in oklab, var(--gold) 70%, transparent),
+    0 0 22px -4px color-mix(in oklab, var(--gold) 55%, transparent);
+}
+.brand .logo.brand-img img { filter: drop-shadow(0 1px 4px color-mix(in oklab, var(--gold) 45%, transparent)); }
+
+/* -- Login : logo complet flottant, halo doré, entrée animée -- */
+.auth-brand { position: relative; }
+.auth-brand::before {
+  content: ""; position: absolute; left: 0; top: 50%; width: 320px; height: 320px;
+  transform: translateY(-50%); pointer-events: none; z-index: -1;
+  background: radial-gradient(circle, color-mix(in oklab, var(--gold) 30%, transparent), transparent 65%);
+  filter: blur(8px); animation: logoAura 6s ease-in-out infinite;
+}
+.auth-logo-full {
+  border: 1px solid color-mix(in oklab, var(--gold) 28%, #fff) !important;
+  box-shadow:
+    0 14px 44px -12px color-mix(in oklab, var(--gold) 55%, #000),
+    0 0 0 5px color-mix(in oklab, var(--gold) 10%, transparent) !important;
+  position: relative; overflow: hidden;
+  animation: logoFloat 6s ease-in-out infinite, logoIn .7s cubic-bezier(.2,.9,.3,1.2) both;
+}
+
+/* -- Balayage doré (sheen) commun aux deux logos -- */
+.brand .logo.brand-img::after, .auth-logo-full::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 32%, color-mix(in oklab, var(--gold-lite) 70%, #fff) 49%, transparent 64%);
+  transform: translateX(-140%); opacity: 0; mix-blend-mode: screen;
+  animation: logoSheen 6s ease-in-out infinite;
+}
+.auth-logo-full::after { animation-delay: .8s; }
+
+@keyframes logoBreath {
+  0%, 100% { box-shadow: inset 0 1px 0 color-mix(in oklab, var(--gold) 22%, transparent), 0 4px 14px -6px color-mix(in oklab, var(--gold) 45%, transparent), 0 0 6px -3px color-mix(in oklab, var(--gold) 30%, transparent); }
+  50%      { box-shadow: inset 0 1px 0 color-mix(in oklab, var(--gold) 30%, transparent), 0 4px 14px -6px color-mix(in oklab, var(--gold) 60%, transparent), 0 0 18px -3px color-mix(in oklab, var(--gold) 55%, transparent); }
+}
+@keyframes logoFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+@keyframes logoAura  { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+@keyframes logoIn    { from { opacity: 0; transform: translateY(10px) scale(.92); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes logoSheen { 0% { transform: translateX(-140%); opacity: 0; } 10% { opacity: .85; } 26% { transform: translateX(140%); opacity: 0; } 100% { transform: translateX(140%); opacity: 0; } }
+
+/* Respect du mouvement réduit */
+[data-motion="off"] .brand .logo.brand-img,
+[data-motion="off"] .auth-logo-full,
+[data-motion="off"] .auth-brand::before,
+[data-motion="off"] .brand .logo.brand-img::after,
+[data-motion="off"] .auth-logo-full::after { animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .brand .logo.brand-img, .auth-logo-full, .auth-brand::before,
+  .brand .logo.brand-img::after, .auth-logo-full::after { animation: none !important; }
+}
+
+/* ===== Auth : forgot / reset password ===== */
+.auth-info {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  padding: 10px 12px; border-radius: var(--r-sm);
+  background: color-mix(in oklab, var(--run) 14%, transparent);
+  border: 1px solid color-mix(in oklab, var(--run) 35%, transparent);
+  color: var(--run); font-size: 12.5px; line-height: 1.35;
+}
+.auth-info svg { width: 16px; height: 16px; flex: none; }
+.auth-back { display: inline-block; margin-top: 14px; text-align: center; width: 100%; }
+.auth-devtoken {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px;
+  padding: 12px; border-radius: var(--r-sm);
+  background: var(--bg-2); border: 1px dashed color-mix(in oklab, var(--accent) 45%, var(--border));
+}
+.auth-devtoken-lbl { font-size: 11.5px; color: var(--tx-mid); font-weight: 600; }
+.auth-devtoken code {
+  font-family: var(--mono); font-size: 11.5px; color: var(--tx-hi);
+  word-break: break-all; background: var(--bg-1); padding: 8px 10px; border-radius: 6px;
+  border: 1px solid var(--border-soft);
+}
+.auth-devtoken .btn { align-self: flex-start; }
+
+/* ===== Boutons plus vivants (hover lift + rebond + halos) ===== */
+.btn {
+  transition: background .18s ease, border-color .18s ease, color .18s ease,
+              box-shadow .22s ease, transform .2s cubic-bezier(.34, 1.56, .64, 1);
+}
+.btn:hover { transform: translateY(-1.5px); }
+.btn:active { transform: translateY(0) scale(.96); }
+
+/* Primaire : halo accentué + léger soulèvement (le shimmer ::after existe déjà) */
+.btn.primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 26px -8px color-mix(in oklab, var(--accent) 80%, transparent),
+              0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
+}
+.btn.primary:active { transform: translateY(0) scale(.96); }
+
+/* Boutons icône (topbar) : micro-zoom + glow */
+.btn.icon svg { transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
+.btn.icon:hover { transform: translateY(-1px) scale(1.07); }
+.btn.icon:hover svg { transform: scale(1.08); }
+.btn.icon:active { transform: scale(.9); }
+
+/* Variantes colorées : halo de la couleur correspondante */
+.btn.danger:hover { transform: translateY(-1.5px); box-shadow: 0 7px 18px -9px color-mix(in oklab, var(--block) 65%, transparent); }
+.btn.ok:hover { transform: translateY(-1.5px); box-shadow: 0 7px 18px -9px color-mix(in oklab, var(--run) 65%, transparent); }
+
+/* Menu latéral : glissement vif au survol */
+.nav-item { transition: background .16s ease, color .16s ease, transform .16s ease; }
+.nav-item:hover { transform: translateX(3px); }
+.nav-item:active { transform: translateX(1px) scale(.99); }
+.nav-item .count { transition: transform .16s cubic-bezier(.34, 1.56, .64, 1); }
+.nav-item:hover .count { transform: scale(1.12); }
+
+/* Chips de filtre : rebond */
+.chip { transition: background .16s ease, border-color .16s ease, color .16s ease, transform .18s cubic-bezier(.34, 1.56, .64, 1), box-shadow .18s ease; }
+.chip:hover { transform: translateY(-1.5px); }
+.chip:active { transform: scale(.94); }
+
+/* Audit : onglets, rescan, solutions */
+.au-tab, .au-rescan, .au-sol {
+  transition: background .16s ease, border-color .16s ease, color .16s ease,
+              box-shadow .2s ease, transform .2s cubic-bezier(.34, 1.56, .64, 1);
+}
+.au-tab:hover, .au-sol:hover:not(:disabled) { transform: translateY(-1.5px); }
+.au-rescan:hover:not(:disabled) { transform: translateY(-1.5px); box-shadow: 0 7px 18px -10px color-mix(in oklab, var(--accent) 65%, transparent); }
+.au-tab:active, .au-sol:active:not(:disabled), .au-rescan:active:not(:disabled) { transform: scale(.97); }
+
+/* Respect du mode « mouvement réduit » (réglage app + préférence système) */
+[data-motion="off"] .btn, [data-motion="off"] .nav-item, [data-motion="off"] .chip,
+[data-motion="off"] .au-tab, [data-motion="off"] .au-rescan, [data-motion="off"] .au-sol,
+[data-motion="off"] .btn.icon svg, [data-motion="off"] .nav-item .count {
+  transition: none !important; transform: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .nav-item, .chip, .au-tab, .au-rescan, .au-sol { transition: none !important; }
+  .btn:hover, .btn:active, .nav-item:hover, .nav-item:active, .chip:hover, .chip:active,
+  .au-tab:hover, .au-tab:active, .au-rescan:hover, .au-sol:hover { transform: none !important; }
+}

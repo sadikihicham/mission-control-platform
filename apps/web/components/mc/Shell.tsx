@@ -3,138 +3,213 @@
 import type { ReactNode } from "react";
 import { Icon } from "@/components/mc/icons";
 import { useI18n, type Lang } from "@/lib/i18n";
+import type { Me } from "@/lib/api";
+import { AGENTS } from "@/lib/mc-data";
 
-type Counts = { running: number; blocked: number; waiting: number };
+// Compteurs du menu (depuis la flotte mock du design, comme les captures).
+const C = {
+  running: AGENTS.filter((a: { status: string }) => a.status === "running").length,
+  blocked: AGENTS.filter((a: { status: string }) => a.status === "blocked").length,
+  waiting: AGENTS.filter((a: { status: string }) => a.status === "waiting").length,
+  done: AGENTS.filter((a: { status: string }) => a.status === "done").length,
+};
+
+type NavItem = { id: string; tkey: string; icon: (p?: object) => JSX.Element; count?: number };
+
+// Catégorie « Mission Control » : les vues de pilotage/cockpit.
+const MISSION: NavItem[] = [
+  { id: "home", tkey: "nav_home", icon: Icon.spark },
+  { id: "overview", tkey: "nav_mission", icon: Icon.grid },
+  { id: "projects", tkey: "nav_projects", icon: Icon.folder },
+  { id: "departments", tkey: "nav_depts", icon: Icon.layers },
+  { id: "hierarchy", tkey: "nav_hierarchy", icon: Icon.layers },
+  { id: "cost", tkey: "nav_cost", icon: Icon.coin },
+  { id: "audit", tkey: "nav_audit", icon: Icon.gauge },
+];
+// Catégorie « Flotte » : les états live des agents.
+const FLEET: NavItem[] = [
+  { id: "running", tkey: "nav_running", icon: Icon.pulse, count: C.running },
+  { id: "review", tkey: "nav_review", icon: Icon.alert, count: C.blocked },
+  { id: "pending", tkey: "nav_pending", icon: Icon.clock },
+  { id: "queue", tkey: "nav_queue", icon: Icon.clock, count: C.waiting },
+  { id: "completed", tkey: "nav_completed", icon: Icon.check, count: C.done },
+];
+const WORKSPACE: NavItem[] = [{ id: "repos", tkey: "nav_repos", icon: Icon.folder }];
+
+// "Bonjour Mr Sultan" — civilité genrée + nom (repli sur le préfixe d'email).
+function greeting(me: Me | null, t: (k: string) => string): string | null {
+  if (!me) return null;
+  const civ = me.civility ? t("civ_" + me.civility) : "";
+  const name = me.full_name || me.email.split("@")[0];
+  return `${t("hello")} ${civ} ${name}`.replace(/\s+/g, " ").trim();
+}
 
 export function Sidebar({
   view,
   onNav,
-  counts,
   canNew,
   onNew,
   onLogout,
+  me,
 }: {
   view: string;
   onNav: (v: string) => void;
-  counts: Counts;
   canNew: boolean;
   onNew: () => void;
   onLogout: () => void;
+  me: Me | null;
 }) {
   const { t } = useI18n();
+  const hello = greeting(me, t);
+  const item = (it: NavItem) => (
+    <button
+      key={it.id}
+      className={"nav-item" + (view === it.id ? " active" : "")}
+      onClick={() => onNav(it.id)}
+      title={t(it.tkey)}
+    >
+      {it.icon({})}
+      <span>{t(it.tkey)}</span>
+      {it.count != null && <span className="count">{it.count}</span>}
+    </button>
+  );
   return (
     <aside className="sidebar">
       <div className="brand">
         <div className="logo brand-img"><img src="/brand-mark.png" alt="Mission Control" /></div>
         <div>
           <div className="name">Mission Control</div>
-          <div className="sub">Ops console</div>
+          <div className="sub">{t("brand_sub")}</div>
         </div>
       </div>
+      {hello && (
+        <div className="user-greet" title={me?.email}>
+          <span className="user-greet-ic">{Icon.spark({})}</span>
+          <span className="user-greet-txt">{hello}</span>
+        </div>
+      )}
       {canNew && (
-        <button className="btn primary" style={{ margin: "0 4px 8px" }} onClick={onNew}>
-          {Icon.plus({})} {t("new_project")}
+        <button className="btn primary" style={{ margin: "0 4px 10px" }} onClick={onNew}>
+          {Icon.plus({})} <span>{t("new_project")}</span>
         </button>
       )}
-      <div className="nav-label">{t("nav_fleet")}</div>
-      <button className={"nav-item" + (view === "projects" ? " active" : "")} onClick={() => onNav("projects")}>{Icon.folder({})}<span>{t("nav_projects")}</span></button>
-      <button className={"nav-item" + (view === "overview" ? " active" : "")} onClick={() => onNav("overview")}>{Icon.grid({})}<span>{t("nav_overview")}</span></button>
-      <button className={"nav-item" + (view === "hierarchy" ? " active" : "")} onClick={() => onNav("hierarchy")}>{Icon.layers({})}<span>{t("nav_hierarchy")}</span></button>
-      <button className="nav-item" disabled style={{ opacity: 0.45 }}>{Icon.gauge({})}<span>{t("nav_audit")}</span></button>
-      <div className="spacer" />
-      <div className="fleet-mini">
-        <div className="row"><span className="dot" style={{ background: "var(--run)" }} />{t("mini_active")} <b>{counts.running}</b></div>
-        <div className="row"><span className="dot" style={{ background: "var(--block)" }} />{t("mini_blocked")} <b>{counts.blocked}</b></div>
-        <div className="row"><span className="dot" style={{ background: "var(--wait)" }} />{t("mini_waiting")} <b>{counts.waiting}</b></div>
+      <div className="sidebar-scroll">
+        <div className="nav-label">{t("sec_mission")}</div>
+        {MISSION.map(item)}
+        <div className="nav-label">{t("nav_fleet")}</div>
+        {FLEET.map(item)}
+        <div className="nav-label">{t("sec_workspace")}</div>
+        {WORKSPACE.map(item)}
       </div>
-      <button className="nav-item logout-item" onClick={onLogout}>{Icon.logout({})}<span>{t("logout")}</span></button>
+      <button className="nav-item logout-item" onClick={onLogout} title={t("logout")}>
+        {Icon.logout({})}<span>{t("logout")}</span>
+      </button>
     </aside>
   );
 }
 
-const LANG_LABEL: Record<Lang, string> = { fr: "FR", en: "EN", ar: "ع" };
-const LANG_NEXT: Record<Lang, Lang> = { fr: "en", en: "ar", ar: "fr" };
+const LANGS: { id: Lang; short: string }[] = [
+  { id: "fr", short: "FR" },
+  { id: "en", short: "EN" },
+  { id: "ar", short: "ع" },
+];
 
 export function Topbar({
   title,
-  role,
-  live,
   theme,
   onToggleTheme,
   onCommand,
-  onTweaks,
+  onMenu,
+  onBell,
+  badge,
+  onLogout,
+  canNew,
+  onNew,
 }: {
   title: string;
-  role: string | null;
-  live: boolean;
   theme: "dark" | "light";
   onToggleTheme: () => void;
   onCommand: () => void;
-  onTweaks: () => void;
+  onMenu: () => void;
+  onBell: () => void;
+  badge: number;
+  onLogout: () => void;
+  canNew: boolean;
+  onNew: () => void;
 }) {
   const { t, lang, setLang } = useI18n();
   return (
     <div className="topbar">
+      <button className="btn ghost icon menu-btn" onClick={onMenu} title="Menu">{Icon.menu({})}</button>
       <h1>{title}</h1>
       <div className="search" onClick={onCommand} style={{ cursor: "pointer" }}>
         {Icon.search({})}
         <input placeholder={t("search_ph")} readOnly style={{ cursor: "pointer" }} />
         <kbd>⌘K</kbd>
       </div>
-      <span className={"live-chip" + (live ? "" : " off")}>
-        <span className="ldot" style={live ? { animation: "pulse 1.6s infinite" } : {}} />
-        {live ? t("live") : t("polling")}
-      </span>
-      <button className="btn ghost icon" onClick={() => setLang(LANG_NEXT[lang])} title={t("lang")} style={{ fontWeight: 600, fontSize: 12 }}>
-        {LANG_LABEL[lang]}
-      </button>
-      <button className="btn ghost icon" onClick={onToggleTheme} title={t("a_theme")}>
-        {theme === "dark" ? Icon.sun({}) : Icon.moon({})}
-      </button>
-      <button className="btn ghost icon" onClick={onTweaks} title={t("tw_title")}>
-        {Icon.sliders({})}
-      </button>
-      {role && <span className="role-chip">{role}</span>}
+      <div className="topbar-actions">
+        <button className="btn ghost icon" onClick={onCommand} title="⌘K">{Icon.search({})}<kbd>⌘K</kbd></button>
+        <button className="btn ghost icon notif-btn" onClick={onBell} title="Notifications">
+          {Icon.bell({})}
+          {badge > 0 && <span className="notif-badge">{badge}</span>}
+        </button>
+        <div className="lang-switch">
+          {LANGS.map((l) => (
+            <button key={l.id} type="button" className={"ls" + (lang === l.id ? " on" : "")} onClick={() => setLang(l.id)}>{l.short}</button>
+          ))}
+        </div>
+        <button className="btn ghost icon" onClick={onToggleTheme} title={t("a_theme")}>
+          {theme === "dark" ? Icon.sun({}) : Icon.moon({})}
+        </button>
+        {canNew && (
+          <button className="btn primary" onClick={onNew}>{Icon.plus({})} <span>{t("new_project")}</span></button>
+        )}
+      </div>
     </div>
   );
 }
 
 export function Shell({
   title,
+  me,
   view,
   onNav,
-  role,
-  live,
   theme,
   onToggleTheme,
-  counts,
+  collapsed,
+  onToggleCollapse,
   canNew,
   onNew,
   onLogout,
   onCommand,
-  onTweaks,
+  onBell,
+  badge,
   children,
 }: {
   title: string;
+  me: Me | null;
   view: string;
   onNav: (v: string) => void;
-  role: string | null;
-  live: boolean;
   theme: "dark" | "light";
   onToggleTheme: () => void;
-  counts: Counts;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   canNew: boolean;
   onNew: () => void;
   onLogout: () => void;
   onCommand: () => void;
-  onTweaks: () => void;
+  onBell: () => void;
+  badge: number;
   children: ReactNode;
 }) {
   return (
-    <div className="app">
-      <Sidebar view={view} onNav={onNav} counts={counts} canNew={canNew} onNew={onNew} onLogout={onLogout} />
+    <div className={"app" + (collapsed ? " nav-collapsed" : "")}>
+      <Sidebar view={view} onNav={onNav} canNew={canNew} onNew={onNew} onLogout={onLogout} me={me} />
       <main className="main">
-        <Topbar title={title} role={role} live={live} theme={theme} onToggleTheme={onToggleTheme} onCommand={onCommand} onTweaks={onTweaks} />
+        <Topbar
+          title={title} theme={theme} onToggleTheme={onToggleTheme} onCommand={onCommand}
+          onMenu={onToggleCollapse} onBell={onBell} badge={badge} onLogout={onLogout} canNew={canNew} onNew={onNew}
+        />
         <div className="scroll">{children}</div>
       </main>
     </div>

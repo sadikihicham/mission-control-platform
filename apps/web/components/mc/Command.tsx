@@ -31,6 +31,7 @@ export type CmdActions = {
   openProject: (id: string) => void;
   newProject?: () => void;
   toggleTheme: () => void;
+  openTweaks?: () => void;
   logout: () => void;
 };
 
@@ -63,6 +64,7 @@ export function CommandPalette({
     const acts: CmdItem[] = [
       ...(actions.newProject ? [{ id: "a-new", icon: Icon.plus, label: t("a_new"), group: "action" as const, kw: "nouveau projet new create", run: actions.newProject }] : []),
       { id: "a-theme", icon: Icon.sun, label: t("a_theme"), group: "action", kw: "theme clair sombre dark light", run: actions.toggleTheme },
+      ...(actions.openTweaks ? [{ id: "a-tweaks", icon: Icon.sliders, label: t("tw_title"), group: "action" as const, kw: "tweaks ambiance presets aurora reglages settings", run: actions.openTweaks }] : []),
       { id: "a-logout", icon: Icon.logout, label: t("a_logout"), group: "action", kw: "deconnexion logout sortir", run: actions.logout },
     ];
     const proj: CmdItem[] = projects.map((p) => ({
