@@ -29,13 +29,13 @@ redis-cli: ## Ouvre redis-cli
 seed: ## (Re)joue le seed
 	$(COMPOSE) exec api python -m apps.api.seed
 
-web: ## Lance le frontend en dev (Next.js sur :3000)
-	cd apps/web && npm install && NEXT_PUBLIC_API_URL=http://localhost:8008 npm run dev
+web: ## Lance le frontend en dev (Next.js sur :3100)
+	cd apps/web && npm install && NEXT_PUBLIC_API_URL=http://localhost:8008 npm run dev -- -p 3100
 
 dev: up ## Backend (compose) + rappel pour le front
 	@echo ""
 	@echo "Backend prêt. Lance le front dans un autre terminal :  make web"
-	@echo "Puis ouvre http://localhost:3000  (login: demo@infinity.ae / password)"
+	@echo "Puis ouvre http://localhost:3100  (login: demo@infinity.ae / password)"
 
 full: ## Tout en conteneurs (web inclus, build long)
 	$(COMPOSE) --profile full up -d --build

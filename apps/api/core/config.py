@@ -34,8 +34,14 @@ class Settings(BaseSettings):
     # Intégration GitHub (optionnelle : augmente la limite de l'API GitHub).
     github_token: str | None = None
 
-    # CORS (front Next.js)
-    cors_origins: list[str] = ["http://localhost:3000"]
+    # CORS (front Next.js). Plusieurs ports : Next bascule sur 3001/3002 si 3000
+    # est occupé. Surchargeable via l'env CORS_ORIGINS (JSON).
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3100",
+    ]
 
 
 @lru_cache
