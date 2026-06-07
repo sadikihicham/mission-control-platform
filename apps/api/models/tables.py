@@ -33,6 +33,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     role: Mapped[str] = mapped_column(String(50), default="admin")
+    full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Civilité : "mr" | "mrs" | "miss" — pilote le message d'accueil genré.
+    civility: Mapped[str | None] = mapped_column(String(10), nullable=True)
     company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -103,4 +106,21 @@ class ActivityLog(Base):
     project_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("projects.id"), nullable=True)
     type: Mapped[str] = mapped_column(String(80))
     payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PasswordResetToken(Base):
+    """Jeton de réinitialisation de mot de passe — usage unique, à durée de vie courte.
+
+    On ne stocke que le **hash** (SHA-256) du jeton brut ; le brut n'existe qu'en
+    transit (lien envoyé à l'utilisateur). `used_at` non nul = déjà consommé.
+    """
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
