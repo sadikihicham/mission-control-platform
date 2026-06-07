@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 
 // Sentinel.tsx — "Mr Sultan": an omnipresent sentinel agent watching the whole system.
 // Floating, summonable anywhere; detects anomalies/bugs/intrusions; can alert the Executive.

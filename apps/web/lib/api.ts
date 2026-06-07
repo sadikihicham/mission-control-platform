@@ -49,11 +49,15 @@ export type ProjectSummary = {
   agents_total: number;
   agents_active: number;
   agents_blocked: number;
+  // Droit d'édition calculé côté API selon le rôle de l'appelant.
+  editable?: boolean;
 };
 
 export type ProjectDetail = ProjectSummary & {
   tasks: Task[];
   agents: Agent[];
+  // Dépôt GitHub associé (lié via PATCH /projects/{id}).
+  repo?: string | null;
 };
 
 /* ---------- Auth (JWT en localStorage) ---------- */
@@ -221,6 +225,6 @@ async function send<T>(method: string, path: string, body?: unknown): Promise<T 
 
 export const createProject = (body: { name: string; description?: string; status?: string }) =>
   send<ProjectDetail>("POST", "/projects", body);
-export const updateProject = (id: string, body: { status?: string; name?: string; description?: string; progress?: number }) =>
+export const updateProject = (id: string, body: { status?: string; name?: string; description?: string; progress?: number; repo?: string | null }) =>
   send<ProjectDetail>("PATCH", `/projects/${id}`, body);
 export const deleteProject = (id: string) => send<null>("DELETE", `/projects/${id}`);

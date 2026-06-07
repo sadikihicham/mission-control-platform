@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 
 // Depts.tsx — Departments org view: company structure → agents → tasks.
 // Porté depuis le design mc-depts.jsx (rendu statique sur les données mock).

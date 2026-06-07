@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 import { useState } from "react";
 import { Icon } from "@/components/mc/icons";
 import { STATUS, fmtCost, fmtTok } from "@/lib/mc-data";
@@ -290,7 +290,7 @@ const FIX = {
     { labelKey: "sol_unblock", to: "review" } ] },
 };
 
-export function Audit({ agents = [], actions = {} }) {
+export function Audit({ agents = [], actions = {} }: { agents?: any[]; actions?: any }) {
   const { lang } = useI18n();
   const t = (k) => (TR[lang] || TR.en)[k] ?? (TR.en[k] ?? k);
   // resolve {token} placeholders embedded in detail strings against TR

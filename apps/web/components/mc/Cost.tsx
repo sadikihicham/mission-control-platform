@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 
 import { Icon } from "@/components/mc/icons";
 import { Robot } from "@/components/mc/Robot";

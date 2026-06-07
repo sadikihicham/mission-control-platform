@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 
 // Robot.tsx — distinct robot avatars per hierarchical role.
 // Monochrome line-art tinted by the agent's status colour (passed as `color`);

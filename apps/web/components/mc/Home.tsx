@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 import { AGENTS, STATUS, fmtCost } from "@/lib/mc-data";
 import { Icon } from "@/components/mc/icons";
 import { Ant, antStateOf } from "@/components/mc/Ant";

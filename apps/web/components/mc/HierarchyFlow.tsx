@@ -1,5 +1,5 @@
-"use client";
 // @ts-nocheck
+"use client";
 
 // HierarchyFlow.tsx — porté de mc-hierarchy.jsx.
 // Arbre top-down repliable des agents + tâches, avec arcs de workflow inter-agents.
