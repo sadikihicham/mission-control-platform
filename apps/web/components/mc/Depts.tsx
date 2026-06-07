@@ -134,6 +134,8 @@ function OrgDiagram({ agents, onPick }) {
     .map((x) => x.d);
   return (
     <div className="org">
+      {/* Vue encore alimentée par des données mock (départements non suivis côté serveur). */}
+      <span className="demo-pill" title="Données de démonstration — non câblées sur le backend">● Données de démonstration</span>
       <div className="org-head">
         <div className="eyebrow2">
           {DeI.layers({})} {tt("org_chart")}

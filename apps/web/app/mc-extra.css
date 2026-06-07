@@ -349,3 +349,14 @@
   .btn:hover, .btn:active, .nav-item:hover, .nav-item:active, .chip:hover, .chip:active,
   .au-tab:hover, .au-tab:active, .au-rescan:hover, .au-sol:hover { transform: none !important; }
 }
+
+/* Badge « démo » : vues encore alimentées par des données mock (Depts, Cost). */
+.demo-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin: 0 0 14px; padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--wait, #c98a00);
+  background: color-mix(in srgb, var(--wait, #c98a00) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--wait, #c98a00) 34%, transparent);
+}
