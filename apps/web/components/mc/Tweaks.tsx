@@ -11,11 +11,14 @@ export type Tweaks = {
   glow: "off" | "doux" | "fort";
   radius: "net" | "normal" | "rond";
   shadow: "plate" | "normale" | "prononcée";
+  // Ambiance sonore : le « son des fourmis au travail » (suit les agents actifs).
+  antSound: boolean;
 };
 
 export const TWEAK_DEFAULTS: Tweaks = {
   dark: true, accent: "#d97757", density: "regular", aurora: "subtile",
   auroraSpeed: "normal", glow: "doux", radius: "normal", shadow: "normale",
+  antSound: false,
 };
 
 const DENS = { compact: 0.84, regular: 1, comfy: 1.16 };
@@ -110,6 +113,12 @@ export function TweaksPanel({
         <Seg label={tr("tw_aurora")} value={t.aurora} options={["off", "subtile", "vif"]} onChange={(v) => set({ aurora: v })} />
         <Seg label={tr("tw_speed")} value={t.auroraSpeed} options={["calme", "normal", "rapide"]} onChange={(v) => set({ auroraSpeed: v })} />
         <Seg label={tr("tw_glow")} value={t.glow} options={["off", "doux", "fort"]} onChange={(v) => set({ glow: v })} />
+
+        <div className="twk-sect">{tr("tw_sound")}</div>
+        <div className="twk-row twk-row-h">
+          <div className="twk-lbl"><span>{tr("tw_sound_ants")}</span></div>
+          <button className="twk-toggle" data-on={t.antSound ? "1" : "0"} onClick={() => set({ antSound: !t.antSound })}><i /></button>
+        </div>
       </div>
     </div>
   );

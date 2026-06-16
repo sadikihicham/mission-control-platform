@@ -129,6 +129,8 @@ export function Topbar({
   title,
   theme,
   onToggleTheme,
+  soundOn,
+  onToggleSound,
   onCommand,
   onMenu,
   onBell,
@@ -140,6 +142,8 @@ export function Topbar({
   title: string;
   theme: "dark" | "light";
   onToggleTheme: () => void;
+  soundOn: boolean;
+  onToggleSound: () => void;
   onCommand: () => void;
   onMenu: () => void;
   onBell: () => void;
@@ -169,6 +173,9 @@ export function Topbar({
             <button key={l.id} type="button" className={"ls" + (lang === l.id ? " on" : "")} onClick={() => setLang(l.id)}>{l.short}</button>
           ))}
         </div>
+        <button className="btn ghost icon" onClick={onToggleSound} title={t("a_sound")} data-on={soundOn ? "1" : "0"}>
+          {soundOn ? Icon.volume({}) : Icon.mute({})}
+        </button>
         <button className="btn ghost icon" onClick={onToggleTheme} title={t("a_theme")}>
           {theme === "dark" ? Icon.sun({}) : Icon.moon({})}
         </button>
@@ -187,6 +194,8 @@ export function Shell({
   onNav,
   theme,
   onToggleTheme,
+  soundOn,
+  onToggleSound,
   collapsed,
   onToggleCollapse,
   canNew,
@@ -205,6 +214,8 @@ export function Shell({
   onNav: (v: string) => void;
   theme: "dark" | "light";
   onToggleTheme: () => void;
+  soundOn: boolean;
+  onToggleSound: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
   canNew: boolean;
@@ -222,7 +233,7 @@ export function Shell({
       <Sidebar view={view} onNav={onNav} canNew={canNew} onNew={onNew} onLogout={onLogout} onChangePassword={onChangePassword} me={me} counts={counts} />
       <main className="main">
         <Topbar
-          title={title} theme={theme} onToggleTheme={onToggleTheme} onCommand={onCommand}
+          title={title} theme={theme} onToggleTheme={onToggleTheme} soundOn={soundOn} onToggleSound={onToggleSound} onCommand={onCommand}
           onMenu={onToggleCollapse} onBell={onBell} badge={badge} onLogout={onLogout} canNew={canNew} onNew={onNew}
         />
         <div className="scroll">{children}</div>

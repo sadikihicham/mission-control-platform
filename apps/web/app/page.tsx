@@ -38,6 +38,7 @@ import { CommandPalette } from "@/components/mc/Command";
 import { TweaksPanel, applyTweaks, TWEAK_DEFAULTS, type Tweaks } from "@/components/mc/Tweaks";
 import { ChangePasswordModal } from "@/components/mc/ChangePasswordModal";
 import { useI18n } from "@/lib/i18n";
+import { useAntColonySound } from "@/lib/mc-sound";
 
 // Vues qui rendent la flotte réelle (Overview) avec un filtre de statut.
 const OVERVIEW_FILTER: Record<string, string> = {
@@ -201,7 +202,8 @@ export default function Home() {
   }, [token, selected, signal]);
 
   // Flotte réelle : tous les agents, poll permanent (alimente le badge cloche,
-  // la commande palette et les vues Overview — pas seulement quand elles sont affichées).
+  // la commande palette, les vues Overview et l'intensité du son des fourmis —
+  // pas seulement quand la flotte est affichée).
   useEffect(() => {
     if (!token) return;
     let alive = true;
@@ -217,6 +219,11 @@ export default function Home() {
     const fresh = agents.find((a) => a.agent === selectedAgent.agent);
     if (fresh && fresh.updated_at !== selectedAgent.updated_at) setSelectedAgent(fresh);
   }, [agents, selectedAgent]);
+
+  // Son des fourmis au travail : intensité pilotée par le nombre d'agents "working".
+  const workingCount = agents.filter((a) => a.state === "working").length;
+  const antIntensity = workingCount === 0 ? 0 : Math.min(1, 0.25 + workingCount * 0.12);
+  useAntColonySound(tweaks.antSound, antIntensity);
 
   if (!hydrated) return null;
   if (!token) return <Login onLogin={setTokenState} theme={tweaks.dark ? "dark" : "light"} onToggleTheme={() => setTw({ dark: !tweaks.dark })} />;
@@ -307,6 +314,8 @@ export default function Home() {
         onNav={(v) => { setView(v); setSelected(null); setSelectedAgent(null); setShowNew(false); }}
         theme={tweaks.dark ? "dark" : "light"}
         onToggleTheme={() => setTw({ dark: !tweaks.dark })}
+        soundOn={tweaks.antSound}
+        onToggleSound={() => setTw({ antSound: !tweaks.antSound })}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
         canNew={writer}
