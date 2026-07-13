@@ -15,6 +15,7 @@ apps/web/*.tsbuildinfo
 # Env & secrets
 .env
 .env.*.local
+infra/.env.prod
 
 # Données runtime mission-control
 .mission-control/status/

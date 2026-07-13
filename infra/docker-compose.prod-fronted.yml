@@ -1,0 +1,30 @@
+# Surcouche pour un déploiement CO-HÉBERGÉ derrière le Caddy d'un AUTRE projet sur le même hôte
+# (SGI, qui possède déjà 80/443 + Let's Encrypt fonctionnel). Agent Control n'expose plus RIEN
+# publiquement lui-même (ports déjà retirés par docker-compose.prod.yml) — `ag-web`/`ag-api`
+# rejoignent le réseau Docker EXTERNE partagé `caddy_net` (déjà créé par SGI, cf. son
+# docker-compose.prod.yml) et c'est SON Caddy qui reverse-proxy directement dessus. Pas besoin
+# d'alias réseau : le nom de service EST déjà `ag-web`/`ag-api`, donc c'est ce nom que Docker
+# enregistre nativement sur `caddy_net` (mêmes principes que GuardianOps go-web/go-api, cf.
+# Agent_Audit_Secu_SI/docs/runbook.md — incident 2026-07-11 : ne JAMAIS utiliser un simple alias
+# ici, le Caddy de l'hôte résout par nom de service réel).
+#
+#   docker network inspect caddy_net >/dev/null 2>&1 || docker network create caddy_net
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+#          -f infra/docker-compose.prod-fronted.yml up -d --build postgres redis ag-api ag-web
+#
+# Voir docs/DEPLOY_FRONTED.md pour la configuration correspondante côté Caddy de l'hôte (SGI).
+
+networks:
+  caddy_net:
+    external: true
+
+services:
+  ag-api:
+    networks:
+      default: {}
+      caddy_net: {}
+
+  ag-web:
+    networks:
+      default: {}
+      caddy_net: {}

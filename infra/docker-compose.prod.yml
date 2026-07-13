@@ -1,0 +1,43 @@
+# Surcouche PROD (générique, sans le co-hébergement) : secrets fail-closed, pas de bind-mount dev,
+# ag-web toujours actif (pas de `--profile full`), build Next.js pointé vers l'URL publique de l'API.
+# Seule, cette surcouche suppose un Caddy propre au projet (non fourni — ce dépôt n'a pour l'instant
+# qu'un mode co-hébergé, cf. `docker-compose.prod-fronted.yml` + `docs/DEPLOY_FRONTED.md`).
+#
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
+#                  [-f infra/docker-compose.prod-fronted.yml] up -d --build postgres redis ag-api ag-web
+#
+# Nécessite Docker Compose ≥ 2.24 (tag de fusion `!override` pour REMPLACER, plutôt que fusionner,
+# `profiles`/`volumes` — même contrainte que le runbook GuardianOps `docker-compose.prod-fronted.yml`).
+
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}
+
+  ag-api:
+    environment:
+      # Gate infra/api-entrypoint.sh : saute le seed démo (demo@infinity.ae/password) et retire
+      # --reload. Voir apps/api/create_admin.py pour créer le vrai compte admin une fois démarré.
+      ENVIRONMENT: prod
+      DATABASE_URL: postgresql+psycopg://mc:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}@postgres:5432/mission_control
+      JWT_SECRET: ${JWT_SECRET:?definir JWT_SECRET}
+      MC_INGEST_TOKEN: ${MC_INGEST_TOKEN:?definir MC_INGEST_TOKEN}
+      # Frontend et API sont 2 origines différentes en prod (ag. vs api.ag.) : sans ça, le
+      # navigateur bloque tous les appels API du frontend réel (CORSMiddleware, apps/api/main.py).
+      CORS_ORIGINS: '["https://ag.infinityauh.com"]'
+    # Retire le bind-mount dev (`- ..:/app`) : en prod le code vient de l'image buildée par
+    # Dockerfile.api, jamais du filesystem host.
+    volumes: !override []
+    # Aucun port publié sur l'hôte : seul Caddy (SGI, via docker-compose.prod-fronted.yml) reverse
+    # -proxy vers ce service, sur le réseau `caddy_net` — même raisonnement que GuardianOps.
+    ports: !override []
+
+  ag-web:
+    # Actif sans `--profile full` en prod (le profil ne sert qu'au confort du dev local, cf. base).
+    profiles: !override []
+    build:
+      args:
+        # Next.js fige NEXT_PUBLIC_* dans le bundle au BUILD (pas au runtime) : doit déjà être
+        # l'URL publique finale de l'API.
+        NEXT_PUBLIC_API_URL: https://api.ag.infinityauh.com
+    ports: !override []

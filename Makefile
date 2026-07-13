@@ -15,7 +15,7 @@ down: ## Arrête le backend
 restart: down up ## Redémarre le backend
 
 logs: ## Suit les logs de l'API
-	$(COMPOSE) logs -f api
+	$(COMPOSE) logs -f ag-api
 
 ps: ## État des conteneurs
 	$(COMPOSE) ps
@@ -27,7 +27,7 @@ redis-cli: ## Ouvre redis-cli
 	$(COMPOSE) exec redis redis-cli
 
 seed: ## (Re)joue le seed
-	$(COMPOSE) exec api python -m apps.api.seed
+	$(COMPOSE) exec ag-api python -m apps.api.seed
 
 web: ## Lance le frontend en dev (Next.js sur :3100)
 	cd apps/web && npm install && NEXT_PUBLIC_API_URL=http://localhost:8008 npm run dev -- -p 3100
@@ -45,4 +45,4 @@ clean: ## Arrête tout + supprime le volume de données
 
 test: ## Lance les tests d'intégration (conteneur api, DB éphémère mc_test)
 	$(COMPOSE) exec -T postgres sh -c "psql -U mc -d mission_control -tc \"SELECT 1 FROM pg_database WHERE datname='mc_test'\" | grep -q 1 || createdb -U mc mc_test"
-	$(COMPOSE) exec -T -e DATABASE_URL=postgresql+psycopg://mc:mc@postgres:5432/mc_test -e JWT_SECRET=test-secret -e MC_INGEST_TOKEN=test-ingest api pytest -q
+	$(COMPOSE) exec -T -e DATABASE_URL=postgresql+psycopg://mc:mc@postgres:5432/mc_test -e JWT_SECRET=test-secret -e MC_INGEST_TOKEN=test-ingest ag-api pytest -q
