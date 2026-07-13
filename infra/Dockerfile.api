@@ -14,9 +14,11 @@ RUN pip install --no-cache-dir -r /app/apps/api/requirements.txt
 COPY apps/__init__.py /app/apps/__init__.py
 COPY apps/api /app/apps/api
 
-# Entrypoint : fourni par le bind-mount `- ..:/app` en dev, mais l'overlay prod le retire
-# (docker-compose.prod.yml, `volumes: !override []`) — doit donc être copié dans l'image.
+# Entrypoint + Alembic : fournis par le bind-mount `- ..:/app` en dev, mais l'overlay prod le
+# retire (docker-compose.prod.yml, `volumes: !override []`) — doivent donc être copiés dans l'image.
 COPY infra/api-entrypoint.sh /app/infra/api-entrypoint.sh
+COPY alembic.ini /app/alembic.ini
+COPY infra/migrations /app/infra/migrations
 
 EXPOSE 8000
 
