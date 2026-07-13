@@ -22,7 +22,11 @@ services:
       timeout: 3s
       retries: 10
 
-  api:
+  # Nom de service `ag-api` (pas `api`) : sur le réseau externe partagé `caddy_net` (prod
+  # co-hébergée, cf. infra/docker-compose.prod-fronted.yml), le nom de service EST l'entrée DNS
+  # vue par le Caddy de l'hôte — pas un simple alias. `api` collisionnerait avec le service `api`
+  # de SGI (même précédent que l'incident GuardianOps du 2026-07-11, résolu par `go-api`/`go-web`).
+  ag-api:
     build:
       context: ..
       dockerfile: infra/Dockerfile.api
@@ -52,8 +56,8 @@ services:
       retries: 8
 
   # Frontend conteneurisé — optionnel (build long). En dev, préférer `make web`.
-  # Activation : `docker compose --profile full up --build`
-  web:
+  # Activation : `docker compose --profile full up --build`. Nom `ag-web` : même raison que `ag-api`.
+  ag-web:
     profiles: ["full"]
     build:
       context: ..
@@ -63,7 +67,7 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      api:
+      ag-api:
         condition: service_healthy
 
 volumes:
