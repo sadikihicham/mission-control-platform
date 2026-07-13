@@ -2,6 +2,7 @@
 
 Owner : `api` (M3). Producteur : `agent-cli` (M5). Consommateur : `realtime` (M4).
 """
+import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -38,7 +39,7 @@ def heartbeat(
     x_mc_token: str | None = Header(default=None, alias="X-MC-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    if x_mc_token != settings.mc_ingest_token:
+    if not secrets.compare_digest(x_mc_token or "", settings.mc_ingest_token):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "token d'ingest invalide")
 
     try:

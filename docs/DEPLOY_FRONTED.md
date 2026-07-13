@@ -30,7 +30,7 @@ cp infra/.env.prod.example infra/.env.prod
 # Génère de VRAIS secrets :
 python3 -c "import secrets; print('JWT_SECRET='+secrets.token_hex(32))"      >> /tmp/mc-secrets
 python3 -c "import secrets; print('MC_INGEST_TOKEN='+secrets.token_hex(32))" >> /tmp/mc-secrets
-echo       "POSTGRES_PASSWORD=$(openssl rand -base64 24)"                    >> /tmp/mc-secrets
+echo       "POSTGRES_PASSWORD=$(openssl rand -hex 24)"                       >> /tmp/mc-secrets
 cat /tmp/mc-secrets    # recopie ces valeurs dans infra/.env.prod, puis :
 shred -u /tmp/mc-secrets 2>/dev/null || rm -f /tmp/mc-secrets
 chmod 600 infra/.env.prod
@@ -39,15 +39,18 @@ chmod 600 infra/.env.prod
 ## 3. Démarrer la stack (sans exposition publique propre)
 
 ```bash
-docker network inspect caddy_net >/dev/null 2>&1 || docker network create caddy_net
-
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
-               -f infra/docker-compose.prod-fronted.yml --env-file infra/.env.prod \
-               up -d --build postgres redis ag-api ag-web
+./infra/deploy-prod.sh
 ```
+Ce script (au lieu de taper la commande `docker compose -f ... -f ... -f ...` à la main) refuse de
+démarrer si Docker Compose < 2.24 (le tag `!override` serait silencieusement ignoré, ports/volumes/
+profiles dev réapparaîtraient en prod) ou si `infra/.env.prod` est absent, crée `caddy_net` si besoin,
+puis lance `up -d --build postgres redis ag-api ag-web`.
+
 `ag-api`/`ag-web` rejoignent `caddy_net` sans publier aucun port sur l'hôte (`ports: !override []`).
 Les migrations + garde anti-seed-démo tournent automatiquement dans `infra/api-entrypoint.sh`
-(`ENVIRONMENT=prod` → seed sauté, pas de `--reload`).
+(`ENVIRONMENT=prod` → seed sauté, pas de `--reload`) — et `apps/api/seed.py` refuse aussi de
+s'exécuter directement si `ENVIRONMENT=prod` (double garde : même un `make seed` lancé par erreur
+sur ce serveur ne recrée pas le compte démo).
 
 ## 4. Vérifier l'absence de compte démo, puis créer le vrai admin
 
@@ -57,8 +60,9 @@ docker compose -f infra/docker-compose.yml exec -T postgres \
   "SELECT count(*) FROM users WHERE email='demo@infinity.ae';"   # attendu : 0
 
 docker compose -f infra/docker-compose.yml exec ag-api \
-  python -m apps.api.create_admin \
-  --email admin@infinityauh.com --password 'MotDePasseFort' --name "Admin"
+  python -m apps.api.create_admin --email admin@infinityauh.com --name "Admin"
+# → invite le mot de passe via un prompt caché (pas d'argument --password en clair
+#   dans l'historique shell / `ps aux` du VPS).
 ```
 Idempotent (relançable sans dupliquer).
 
@@ -96,9 +100,7 @@ MC_API_URL=https://api.ag.infinityauh.com MC_INGEST_TOKEN=<le vrai token> \
 
 ```bash
 cd mission-control && git pull
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml \
-               -f infra/docker-compose.prod-fronted.yml --env-file infra/.env.prod \
-               up -d --build postgres redis ag-api ag-web
+./infra/deploy-prod.sh
 ```
 Pas besoin de recréer le Caddy de SGI sauf si le Caddyfile de SGI change lui-même.
 

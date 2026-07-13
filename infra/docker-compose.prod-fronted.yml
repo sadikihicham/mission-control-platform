@@ -14,8 +14,6 @@
 #
 # Voir docs/DEPLOY_FRONTED.md pour la configuration correspondante côté Caddy de l'hôte (SGI).
 
-name: agent-control
-
 networks:
   caddy_net:
     external: true

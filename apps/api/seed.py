@@ -2,6 +2,9 @@
 
 Lancement : `python -m apps.api.seed` (DATABASE_URL doit pointer une base migrée).
 """
+import os
+import sys
+
 from sqlalchemy import select
 
 from apps.api.core.db import get_sessionmaker
@@ -21,6 +24,9 @@ SEED_USERS = [
 
 
 def run() -> None:
+    if os.getenv("ENVIRONMENT", "").lower().startswith("prod"):
+        print("refuse : ENVIRONMENT=prod, seed démo interdit en production", file=sys.stderr)
+        raise SystemExit(1)
     Session = get_sessionmaker()
     with Session() as db:
         for email, pwd, role, full_name, civility in SEED_USERS:

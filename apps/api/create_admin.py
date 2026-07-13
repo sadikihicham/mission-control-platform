@@ -6,9 +6,12 @@ prod dès que le seed démo est désactivé (`ENVIRONMENT=prod`, cf. `infra/api-
 lui, aucun moyen de se connecter au premier démarrage.
 
 Lancement (dans le conteneur `ag-api`) :
-    python -m apps.api.create_admin --email admin@exemple.com --password 'MotDePasseFort' --name "Admin"
+    python -m apps.api.create_admin --email admin@exemple.com --name "Admin"
+    (invite le mot de passe via un prompt caché — `--password` reste dispo pour un usage scripté,
+    mais le laisser en argument CLI le rend visible dans l'historique shell et `ps aux`)
 """
 import argparse
+import getpass
 import sys
 
 from sqlalchemy import select
@@ -43,16 +46,21 @@ def run(email: str, password: str, name: str, civility: str | None) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Bootstrap d'un compte admin prod-safe (idempotent).")
     parser.add_argument("--email", required=True)
-    parser.add_argument("--password", required=True)
+    parser.add_argument(
+        "--password", default=None,
+        help="Évite si possible : visible dans l'historique shell/ps aux. Omis → prompt caché.",
+    )
     parser.add_argument("--name", required=True, help="Nom affiché (full_name)")
     parser.add_argument("--civility", choices=["mr", "mrs", "miss"], default=None)
     args = parser.parse_args()
 
-    if len(args.password) < MIN_PASSWORD_LENGTH:
+    password = args.password or getpass.getpass("Mot de passe admin : ")
+
+    if len(password) < MIN_PASSWORD_LENGTH:
         print(f"refuse : mot de passe < {MIN_PASSWORD_LENGTH} caractères", file=sys.stderr)
         raise SystemExit(1)
 
-    run(args.email, args.password, args.name, args.civility)
+    run(args.email, password, args.name, args.civility)
 
 
 if __name__ == "__main__":

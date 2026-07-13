@@ -22,6 +22,9 @@ services:
       DATABASE_URL: postgresql+psycopg://mc:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}@postgres:5432/mission_control
       JWT_SECRET: ${JWT_SECRET:?definir JWT_SECRET}
       MC_INGEST_TOKEN: ${MC_INGEST_TOKEN:?definir MC_INGEST_TOKEN}
+      # Frontend et API sont 2 origines différentes en prod (ag. vs api.ag.) : sans ça, le
+      # navigateur bloque tous les appels API du frontend réel (CORSMiddleware, apps/api/main.py).
+      CORS_ORIGINS: '["https://ag.infinityauh.com"]'
     # Retire le bind-mount dev (`- ..:/app`) : en prod le code vient de l'image buildée par
     # Dockerfile.api, jamais du filesystem host.
     volumes: !override []
