@@ -9,9 +9,19 @@ Contract D). Conçu pour tourner dans n'importe quel environnement d'agent.
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `MC_API_URL` | `http://localhost:8000` | base de l'API |
-| `MC_INGEST_TOKEN` | `dev-ingest-token` | header `X-MC-Token` |
+| `MC_INGEST_TOKEN` | `dev-ingest-token` | header `X-MC-Token` — secret d'**enrôlement** (1er contact seulement, voir ci-dessous) |
 | `MC_AGENT_KEY` | `agent` | identifiant de l'agent |
 | `MC_PROJECT` | _(vide)_ | slug du projet (optionnel) |
+| `MC_TOKEN_FILE` | `~/.mc-platform/credentials.json` | où persister le token émis à l'enrôlement |
+
+### Identité par agent (enrôlement)
+
+Ce client envoie `X-MC-Enroll: 1` à chaque heartbeat. Au premier heartbeat d'un
+`agent_key`, le serveur émet un token propre à cet agent (champ `agent_token` dans la
+réponse) ; ce client le persiste dans `MC_TOKEN_FILE` (mode `0600`) et l'utilise ensuite
+à la place de `MC_INGEST_TOKEN` pour ce même `agent_key`. La persistance n'est jamais
+bloquante : si l'écriture échoue, le heartbeat aboutit quand même (le prochain appel
+retentera l'enrôlement avec le secret partagé).
 
 ## Usage
 

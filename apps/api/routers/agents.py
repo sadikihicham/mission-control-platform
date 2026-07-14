@@ -4,7 +4,7 @@ Les agents proviennent de la table `agents`, alimentée par :
 - le sync des fichiers du skill mission-control (services/mc_sync) ;
 - les heartbeats `mc-platform` (routers/heartbeat).
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
@@ -54,3 +54,19 @@ def get_agent_activity(agent_key: str, db: Session = Depends(get_db)) -> list[Ac
             )
         )
     return out
+
+
+@router.post("/agents/{agent_key}/revoke-token", status_code=status.HTTP_204_NO_CONTENT)
+def revoke_agent_token(
+    agent_key: str,
+    _: object = Depends(require_role(Role.admin)),
+    db: Session = Depends(get_db),
+) -> None:
+    """Révoque le token d'un agent enrôlé (Contract D). L'agent devra se ré-enrôler
+    avec le secret partagé MC_INGEST_TOKEN + X-MC-Enroll au prochain heartbeat."""
+    agent = db.scalar(select(Agent).where(Agent.agent_key == agent_key))
+    if not agent:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "agent introuvable")
+    agent.token_hash = None
+    agent.token_issued_at = None
+    db.commit()

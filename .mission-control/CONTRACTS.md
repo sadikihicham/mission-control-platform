@@ -64,7 +64,15 @@ Schémas Pydantic exportés → OpenAPI → `packages/contracts` (types TS) pour
 
 **LE contrat critique. Aligné sur le JSON `mc` existant.**
 
-- `POST /agents/heartbeat` (non authentifié JWT au MVP ; secret partagé `MC_INGEST_TOKEN` en header `X-MC-Token`)
+- `POST /agents/heartbeat` (non authentifié JWT au MVP). Identité par agent (depuis
+  `0005_agent_token`) : `MC_INGEST_TOKEN` en header `X-MC-Token` sert de secret
+  **d'enrôlement** uniquement, opt-in via `X-MC-Enroll: 1`. Au 1er heartbeat d'un `agent_key`
+  qui envoie ce header, le serveur émet un token propre à cet agent (`agent_token` dans la
+  réponse, une seule fois) ; ce token remplace ensuite le secret partagé pour cet `agent_key`
+  (`agents.token_hash`, SHA-256). Un client qui n'envoie jamais `X-MC-Enroll` (ancienne
+  version d'`agent-cli`, script `curl` manuel) n'est jamais enrôlé et garde le comportement
+  d'origine — secret partagé accepté à chaque appel. Révocation : `POST
+  /agents/{agent_key}/revoke-token` (admin) remet l'agent en attente de ré-enrôlement.
 - Body :
 ```json
 {

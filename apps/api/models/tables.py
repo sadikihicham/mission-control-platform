@@ -78,6 +78,10 @@ class Agent(Base):
     blocker: Mapped[str | None] = mapped_column(Text, nullable=True)
     meta: Mapped[dict] = mapped_column(JSONB, default=dict)
     last_heartbeat: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Identité par agent (Contract D) : hash SHA-256 du token émis à l'enrôlement.
+    # None = agent pas encore enrôlé, le secret partagé MC_INGEST_TOKEN fait encore foi.
+    token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    token_issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
