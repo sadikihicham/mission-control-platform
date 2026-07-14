@@ -19,6 +19,9 @@ FROM base AS runner
 ENV NODE_ENV=production
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+# Next.js standalone n'inclut PAS public/ (seulement les fichiers tracés) — doit être copié à part,
+# sinon toutes les images statiques (logos, favicons servis via /public) répondent 404 en prod.
+COPY --from=builder /app/public ./public
 EXPOSE 3000
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
     CMD node -e "require('http').get('http://localhost:3000',r=>process.exit(r.statusCode<500?0:1)).on('error',()=>process.exit(1))"
