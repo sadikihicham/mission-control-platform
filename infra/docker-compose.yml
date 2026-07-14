@@ -72,6 +72,12 @@ services:
       dockerfile: infra/Dockerfile.web
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8008
+    environment:
+      # Le serveur Next.js standalone lit HOSTNAME pour choisir l'interface d'écoute (server.js :
+      # `process.env.HOSTNAME || '0.0.0.0'`). Docker fixe HOSTNAME=<id conteneur> par défaut, qui se
+      # résout sur l'IP du 1er réseau attaché seulement — invisible depuis un 2e réseau (ex.
+      # caddy_net en prod fronted). Écraser explicitement pour écouter sur toutes les interfaces.
+      HOSTNAME: "0.0.0.0"
     ports:
       - "3000:3000"
     depends_on:
