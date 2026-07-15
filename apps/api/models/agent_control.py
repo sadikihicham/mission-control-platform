@@ -15,14 +15,14 @@ Aucune colonne `installation_id` n'est ajoutée aux tables V0 (`projects`,
 lignes tenant (FK `installation_id` en RESTRICT).
 """
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.core.db import Base
-from apps.api.models.tables import _uuid_pk
+from apps.api.models.tables import Agent, _uuid_pk
 
 # Installation locale déterministe (mode autonome / dev). Doit rester alignée sur
 # `integrations.local_adapter.LOCAL_INSTALLATION_ID` (= uuid5(NAMESPACE_URL,
@@ -94,3 +94,68 @@ class MCUserMapping(Base):
     )
 
     installation: Mapped["MCInstallation"] = relationship(back_populates="mappings")
+
+
+class AgentCredential(Base):
+    """Credential individuel d'un agent (ADR-0004) — hashé, scopé, rotatif, révocable.
+
+    Le secret brut n'est **jamais** persisté : seul son empreinte SHA-256
+    (`secret_hash`) est stockée, exactement comme `PasswordResetToken` /
+    l'enrôlement Contract D (`generate_reset_token` + `hash_reset_token`). Le
+    secret complet (`<key_prefix>.<random>`) n'est renvoyé qu'une seule fois, à la
+    création/rotation (`credential_created`). L'ingest V1 s'authentifie par ce
+    credential : le serveur en dérive tenant + agent (jamais depuis un body).
+
+    Machine d'état `credential` (§9) : `active → (revoked|expired)`, terminaux
+    immuables. La rotation crée un **nouveau** credential et révoque l'ancien.
+    """
+
+    __tablename__ = "agent_credentials"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    # CASCADE : les credentials suivent leur agent (jamais du hard-delete d'agent
+    # en pratique ; pas un historique métier/audit, un secret d'accès).
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="CASCADE"), index=True
+    )
+    # Préfixe public opaque (ex. "ac_1a2b3c4d") : identifiant de lookup non secret,
+    # transporté en clair dans le secret complet `<key_prefix>.<random>`.
+    key_prefix: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    # Empreinte SHA-256 (hex, 64) du secret COMPLET. Le brut n'existe qu'en transit.
+    secret_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    # Scopes explicites (ex. ["ingest", "commands"]). Fail-closed si scope requis absent.
+    scopes: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Révocation : non nul = refusé immédiatement au prochain appel (terminal).
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    agent: Mapped["Agent"] = relationship(back_populates="credentials")
+
+    def is_usable(self, *, now: datetime | None = None) -> bool:
+        """Vrai si le credential peut agir : ni révoqué, ni expiré (fail-closed).
+
+        Un credential révoqué (`revoked_at`) ou expiré (`expires_at` dépassé) est
+        refusé **immédiatement**, sans période de grâce.
+        """
+        moment = now or datetime.now(UTC)
+        if self.revoked_at is not None:
+            return False
+        if self.expires_at is not None and self.expires_at <= moment:
+            return False
+        return True
+
+    @property
+    def status(self) -> str:
+        """Statut dérivé (machine `credential`) : active|revoked|expired."""
+        if self.revoked_at is not None:
+            return "revoked"
+        if self.expires_at is not None and self.expires_at <= datetime.now(UTC):
+            return "expired"
+        return "active"

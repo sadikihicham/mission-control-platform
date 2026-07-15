@@ -4,8 +4,10 @@ Owner : agent `db-core`. Consommé par `auth` (User) et `api` (tous).
 """
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -21,6 +23,11 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from apps.api.core.db import Base
 from apps.api.models.enums import AgentState, ProjectStatus
+
+if TYPE_CHECKING:
+    # Référence croisée pour la relation `Agent.credentials` (défini dans
+    # `agent_control.py`). Import type-only : aucun cycle à l'exécution.
+    from apps.api.models.agent_control import AgentCredential
 
 
 def _uuid_pk() -> Mapped[uuid.UUID]:
@@ -89,11 +96,48 @@ class Agent(Base):
     # None = agent pas encore enrôlé, le secret partagé MC_INGEST_TOKEN fait encore foi.
     token_hash: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     token_issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- Registre Agent Control V1 (extensions ADDITIVES, migration 0011) ---
+    # Toutes nullables/défaultées : un producteur V0 (heartbeat/sync fichier) ne
+    # renseigne jamais ces colonnes et garde exactement son comportement. Le
+    # registre V1 (route `manage_agents`) les gère ; l'ingest V1 fait avancer
+    # `last_sequence` et `last_heartbeat` de façon monotone (cf. ADR-0009).
+    #
+    # Tenant V1 : nullable en base (compat V0, ADR-0007), obligatoire au niveau
+    # applicatif pour toute donnée V1. Résolu serveur depuis le credential/JWT
+    # (ADR-0003), jamais depuis un body. RESTRICT : jamais de cascade destructive
+    # sur une installation tenant.
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    runtime: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    provider: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    client_version: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    environment: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Capacités déclarées de l'agent (ex. ["code", "shell"]) — liste validée.
+    capabilities: Mapped[list] = mapped_column(JSONB, default=list, server_default="[]")
+    # Statut REGISTRE (distinct de `state` live) : active|suspended|revoked|archived.
+    # Fail-closed hors "active" côté ingest/commandes (lot ultérieur).
+    status: Mapped[str] = mapped_column(String(20), default="active", server_default="active")
+    registered_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    registered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Plus haute séquence ingérée pour cet agent : rejette tout événement V1
+    # d'une séquence ≤ (monotone, ne régresse jamais — §8/§10 du contrat V1).
+    last_sequence: Mapped[int] = mapped_column(BigInteger, default=0, server_default="0")
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
     project: Mapped["Project | None"] = relationship(back_populates="agents")
+    credentials: Mapped[list["AgentCredential"]] = relationship(
+        back_populates="agent", cascade="all, delete-orphan"
+    )
 
 
 class Task(Base):

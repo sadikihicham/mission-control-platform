@@ -5,6 +5,7 @@ Import canonique : `from apps.api.models import User, Project, Agent, Task, Acti
 from apps.api.models.agent_control import (
     LOCAL_INSTALLATION_ID,
     LOCAL_INSTALLATION_KEY,
+    AgentCredential,
     MCInstallation,
     MCUserMapping,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "AgentState",
     "MCInstallation",
     "MCUserMapping",
+    "AgentCredential",
     "LOCAL_INSTALLATION_ID",
     "LOCAL_INSTALLATION_KEY",
 ]
