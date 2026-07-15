@@ -9,7 +9,15 @@ from sqlalchemy import select
 
 from apps.api.core.db import get_sessionmaker
 from apps.api.core.security import hash_password
-from apps.api.models import Project, ProjectStatus, User
+from apps.api.models import (
+    LOCAL_INSTALLATION_ID,
+    LOCAL_INSTALLATION_KEY,
+    MCInstallation,
+    MCUserMapping,
+    Project,
+    ProjectStatus,
+    User,
+)
 
 # Comptes de démo. Le 1er est le login par défaut de la plateforme.
 # (email, mot de passe, rôle, nom affiché, civilité mr|mrs|miss)
@@ -52,6 +60,44 @@ def run() -> None:
                 )
             )
             print("+ projet démo demo-crm (45%)")
+        db.commit()
+
+        # --- Agent Control V1 : installation locale + mappings utilisateurs ---
+        # Idempotent : conftest reconstruit le schéma via create_all (sans alembic),
+        # donc le socle tenancy doit exister après seed pour que /agent-control/v1
+        # résolve un contexte. L'id est déterministe (aligné local_adapter).
+        installation = db.get(MCInstallation, LOCAL_INSTALLATION_ID)
+        if installation is None:
+            installation = MCInstallation(
+                id=LOCAL_INSTALLATION_ID,
+                external_tenant_id=LOCAL_INSTALLATION_KEY,
+                installation_key=LOCAL_INSTALLATION_KEY,
+                status="active",
+            )
+            db.add(installation)
+            print(f"+ installation locale {LOCAL_INSTALLATION_KEY} ({LOCAL_INSTALLATION_ID})")
+        db.commit()
+
+        for user in db.scalars(select(User)).all():
+            existing = db.scalar(
+                select(MCUserMapping).where(
+                    MCUserMapping.installation_id == LOCAL_INSTALLATION_ID,
+                    MCUserMapping.external_user_id == str(user.id),
+                )
+            )
+            if existing is None:
+                db.add(
+                    MCUserMapping(
+                        installation_id=LOCAL_INSTALLATION_ID,
+                        external_user_id=str(user.id),
+                        local_user_id=user.id,
+                        email=user.email,
+                        display_name=user.full_name,
+                        role=user.role,
+                        status="active",
+                    )
+                )
+                print(f"+ mapping user {user.email} → installation locale")
         db.commit()
     print("seed OK")
 
