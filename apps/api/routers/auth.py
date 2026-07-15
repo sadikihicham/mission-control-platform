@@ -2,7 +2,7 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from pydantic import BaseModel, Field
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.core.config import settings
 from apps.api.core.db import get_db
+from apps.api.core.ratelimit import check_and_increment
 from apps.api.core.roles import Role, has_at_least
 from apps.api.core.security import (
     create_access_token,
@@ -24,6 +25,20 @@ from apps.api.models import PasswordResetToken, User
 
 # Durée de vie d'un jeton de réinitialisation.
 _RESET_TTL_MINUTES = 30
+
+# Anti brute-force sur /auth/login — actif en prod uniquement (même garde que le
+# seed démo / --reload, cf. infra/api-entrypoint.sh) : le harness de test appelle
+# /auth/login des dizaines de fois via les fixtures admin_token/pm_token/viewer_token,
+# ça casserait les tests si actif hors prod.
+_LOGIN_RATE_LIMIT = 10
+_LOGIN_RATE_WINDOW_SECONDS = 600
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
 
 router = APIRouter(tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)
@@ -48,7 +63,15 @@ class MeOut(BaseModel):
 
 
 @router.post("/auth/login", response_model=TokenOut)
-def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
+def login(body: LoginIn, request: Request, db: Session = Depends(get_db)) -> TokenOut:
+    if settings.environment.lower().startswith("prod"):
+        key = f"ratelimit:login:{_client_ip(request)}"
+        if not check_and_increment(
+            key, limit=_LOGIN_RATE_LIMIT, window_seconds=_LOGIN_RATE_WINDOW_SECONDS
+        ):
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS, "trop de tentatives, réessayez plus tard"
+            )
     user = db.scalar(select(User).where(User.email == body.email))
     if not user or not verify_password(body.password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "identifiants invalides")
