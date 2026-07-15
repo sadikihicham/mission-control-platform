@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Index,
@@ -393,3 +394,230 @@ class AgentRunStep(Base):
     )
 
     run: Mapped["AgentRun"] = relationship(back_populates="steps")
+
+
+class AgentPolicy(Base):
+    """Règle de gouvernance `allow|deny|require_approval` — plan de contrôle P5.
+
+    Une politique borne une action (`action_type` = type de commande ou outil,
+    `*` = joker) dans une **portée** (`scope_type` installation|project|agent) et
+    définit son `effect`. L'évaluation est **déterministe** (schéma solution §
+    `agent_policies`) : à `(agent, action_type)` donné, on ordonne les politiques
+    actives du tenant par priorité décroissante puis spécificité de portée
+    (agent > project > installation) puis action exacte > joker puis ancienneté —
+    la première correspondance gagne. `version` = verrou optimiste (édition
+    concurrente). Le tenant `installation_id` est résolu serveur (ADR-0003).
+    """
+
+    __tablename__ = "agent_policies"
+    __table_args__ = (
+        # Sélection des politiques applicables d'un tenant par portée/action.
+        Index("ix_agent_policies_installation_scope", "installation_id", "scope_type"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    # installation | project | agent (portée d'application, du plus large au plus étroit).
+    scope_type: Mapped[str] = mapped_column(
+        String(20), default="installation", server_default="installation"
+    )
+    # project_id / agent_id ciblé (NULL pour une portée installation, tenant entier).
+    scope_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    # Type de commande/outil ciblé. "*" = joker (toutes les actions de la portée).
+    action_type: Mapped[str] = mapped_column(String(120), default="*", server_default="*")
+    # allow | deny | require_approval (effet appliqué à la première correspondance).
+    effect: Mapped[str] = mapped_column(String(20))
+    # Niveau de risque attaché à une approbation générée (low|medium|high|critical).
+    risk_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Conditions structurées (validées) — réservé pour affinage (P6 durcira).
+    conditions: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    # Priorité explicite : une valeur plus haute l'emporte (départage avant portée).
+    priority: Mapped[int] = mapped_column(Integer, default=100, server_default="100")
+    # active | disabled (fail-closed : une politique disabled n'est jamais évaluée).
+    status: Mapped[str] = mapped_column(String(20), default="active", server_default="active")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ApprovalRequest(Base):
+    """Demande d'approbation d'une action à risque — plan de contrôle P5.
+
+    Créée quand la politique applicable rend `require_approval` : la commande
+    associée reste `queued` (non livrable) tant qu'une décision **positive** et
+    non expirée n'existe pas. La décision est **versionnée** (`version`, verrou
+    optimiste) pour empêcher toute double décision concurrente : la transition
+    `pending → approved|rejected` est appliquée par un UPDATE conditionnel atomique
+    (`WHERE status='pending' AND version=:expected`). Machine `approval` figée (§9).
+
+    Tenant `installation_id` résolu serveur (ADR-0003). FK projet/tâche/run en
+    SET NULL : la demande survit à la suppression de son contexte (trace auditable).
+    """
+
+    __tablename__ = "approval_requests"
+    __table_args__ = (
+        # File d'approbations d'un tenant, tri par récence.
+        Index("ix_approval_requests_installation_created", "installation_id", "created_at"),
+        Index("ix_approval_requests_installation_status", "installation_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="RESTRICT"), index=True
+    )
+    # Politique qui a déclenché la demande (audit de la décision de policy).
+    policy_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_policies.id", ondelete="SET NULL"), nullable=True
+    )
+    action_type: Mapped[str] = mapped_column(String(120))
+    risk_level: Mapped[str] = mapped_column(String(20), default="medium", server_default="medium")
+    title: Mapped[str] = mapped_column(String(255))
+    # Contexte affiché à l'approbateur (déjà redacted en amont — jamais de brut).
+    context: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    requested_by_agent: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    # pending | approved | rejected | expired | cancelled (machine `approval`).
+    status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending")
+    assigned_to: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    decision_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    decision_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Verrou optimiste : empêche une double décision concurrente (cœur du Gate P5).
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    def is_expired(self, *, now: datetime | None = None) -> bool:
+        """Vrai si la demande a dépassé son SLA (`expires_at`) — fail-closed."""
+        if self.expires_at is None:
+            return False
+        return self.expires_at <= (now or datetime.now(UTC))
+
+
+class AgentCommand(Base):
+    """Commande opérateur vers un agent — plan de contrôle P5.
+
+    File asynchrone : l'opérateur soumet (`POST /runs/{id}/commands`), l'agent la
+    récupère en long poll (`GET /agent/commands`, passage `queued → delivered`),
+    l'acquitte (`→ acknowledged`) puis publie son résultat (`→ succeeded|failed`).
+    Machine `command` figée (§9). Idempotence par `(installation_id,
+    idempotency_key)` : rejouer une soumission ne crée pas de doublon.
+
+    Une commande soumise à `require_approval` est créée `queued` **non livrable**
+    (`released_at IS NULL`, `approval_request_id` renseigné) : elle n'est proposée
+    à l'agent qu'après une décision positive (`released_at` posé à l'approbation).
+    Un `deny` ne crée jamais la commande. Tenant résolu serveur (ADR-0003).
+    """
+
+    __tablename__ = "agent_commands"
+    __table_args__ = (
+        # Idempotence par tenant : une clé ne matérialise qu'une commande.
+        UniqueConstraint(
+            "installation_id", "idempotency_key", name="uq_agent_commands_idempotency"
+        ),
+        # File de livraison d'un agent (statut + création).
+        Index("ix_agent_commands_agent_status", "agent_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="RESTRICT"), index=True
+    )
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    command_type: Mapped[str] = mapped_column(String(120))
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    # queued | delivered | acknowledged | succeeded | failed | expired | cancelled.
+    status: Mapped[str] = mapped_column(String(20), default="queued", server_default="queued")
+    # Clé d'idempotence (fournie par l'opérateur, sinon générée) — unique par tenant.
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # Demande d'approbation liée (si require_approval). Pas d'auto-livraison tant
+    # qu'elle n'est pas approuvée (`released_at` reste NULL).
+    approval_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("approval_requests.id", ondelete="SET NULL"), nullable=True
+    )
+    # Politique/effet évalués à la soumission (traçabilité de la décision de policy).
+    policy_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_policies.id", ondelete="SET NULL"), nullable=True
+    )
+    policy_effect: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    risk_level: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Libération pour livraison : posé immédiatement si `allow`, à l'approbation si
+    # `require_approval`. NULL = en attente de décision → jamais livrée à l'agent.
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    result_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    result_payload: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    def is_expired(self, *, now: datetime | None = None) -> bool:
+        """Vrai si la commande a dépassé son TTL (`expires_at`)."""
+        if self.expires_at is None:
+            return False
+        return self.expires_at <= (now or datetime.now(UTC))
+
+    def is_deliverable(self, *, now: datetime | None = None) -> bool:
+        """Vrai si la commande peut être livrée : `queued`, libérée, non expirée.
+
+        Une commande en attente d'approbation (`released_at IS NULL`) n'est jamais
+        livrable — c'est l'invariant central du Gate P5.
+        """
+        return (
+            self.status == "queued"
+            and self.released_at is not None
+            and not self.is_expired(now=now)
+        )

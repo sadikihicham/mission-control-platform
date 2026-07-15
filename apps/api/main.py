@@ -15,6 +15,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from apps.api.agent_control.control import agent_routes as agent_control_agent_cmd_router
+from apps.api.agent_control.control import routes as agent_control_control_router
 from apps.api.agent_control.ingest import routes as agent_control_ingest_router
 from apps.api.agent_control.runs import routes as agent_control_runs_router
 from apps.api.core.config import settings
@@ -86,3 +88,10 @@ app.include_router(agent_control_ingest_router.router)
 # Bornage tenant + capacité `view` (matrice figée §8). Les runs se créent par
 # projection des événements d'ingest, pas par une route utilisateur (P4).
 app.include_router(agent_control_runs_router.router)
+# Agent Control V1 — contrôle humain (P5) : commandes (soumission opérateur via
+# POST /runs/{id}/commands), approbations (décision versionnée) et politiques
+# (allow|deny|require_approval). JWT hôte + capacité (operate/approve/admin/view).
+app.include_router(agent_control_control_router.router)
+# Agent Control V1 — file de commandes côté agent (récupération long poll, ACK,
+# résultat). Authentifié par credential agent (scope `commands`), hors RBAC user.
+app.include_router(agent_control_agent_cmd_router.router)

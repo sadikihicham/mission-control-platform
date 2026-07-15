@@ -36,6 +36,24 @@ class Settings(BaseSettings):
     # par POST /agent-control/v1/ingest/events. Au-delà → validation_error (422).
     mc_event_batch_max: int = 200
 
+    # Contrôle P5 — file de commandes (contrat V1 §8, schéma solution §16).
+    # Long poll borné de `GET /agent-control/v1/agent/commands` : durée maximale
+    # d'attente serveur (secondes) quand aucune commande n'est livrable. Le client
+    # peut demander moins via `?wait=`. Défaut 0 = réponse immédiate (les tests et
+    # les producteurs bas-débit n'attendent pas). Surchargeable via l'env.
+    mc_command_long_poll_seconds: int = 0
+    # TTL par défaut d'une commande soumise (secondes) : au-delà, une commande
+    # encore `queued|delivered` est marquée `expired` et n'est plus livrée.
+    mc_command_default_ttl_seconds: int = 900
+    # SLA par défaut d'une demande d'approbation (secondes) : au-delà, `expired`
+    # (aucune décision positive possible — la commande liée est annulée).
+    mc_approval_default_ttl_seconds: int = 3600
+    # Effet appliqué quand AUCUNE politique ne correspond à `(agent, action)`.
+    # `allow` (défaut) : la capacité `operate` gouverne déjà l'accès, les politiques
+    # servent à restreindre/encadrer des actions ciblées. Basculer sur `deny` pour
+    # un mode fail-closed strict (rien n'est autorisé sans politique explicite).
+    mc_policy_default_effect: str = "allow"
+
     # Compatibilité Contract D (ADR-0002/0004) : autorise le secret global partagé
     # `MC_INGEST_TOKEN` pour l'enrôlement/heartbeat V0. True = compat maintenue (les
     # producteurs V0 fonctionnent inchangés). En production embarquée, désactiver
