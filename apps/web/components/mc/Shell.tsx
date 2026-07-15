@@ -4,15 +4,8 @@ import type { ReactNode } from "react";
 import { Icon } from "@/components/mc/icons";
 import { useI18n, type Lang } from "@/lib/i18n";
 import type { Me } from "@/lib/api";
-import { AGENTS } from "@/lib/mc-data";
 
-// Compteurs du menu (depuis la flotte mock du design, comme les captures).
-const C = {
-  running: AGENTS.filter((a: { status: string }) => a.status === "running").length,
-  blocked: AGENTS.filter((a: { status: string }) => a.status === "blocked").length,
-  waiting: AGENTS.filter((a: { status: string }) => a.status === "waiting").length,
-  done: AGENTS.filter((a: { status: string }) => a.status === "done").length,
-};
+export type FleetCounts = { running: number; blocked: number; waiting: number; done: number };
 
 type NavItem = { id: string; tkey: string; icon: (p?: object) => JSX.Element; count?: number };
 
@@ -26,15 +19,18 @@ const MISSION: NavItem[] = [
   { id: "cost", tkey: "nav_cost", icon: Icon.coin },
   { id: "audit", tkey: "nav_audit", icon: Icon.gauge },
 ];
-// Catégorie « Flotte » : les états live des agents.
-const FLEET: NavItem[] = [
-  { id: "running", tkey: "nav_running", icon: Icon.pulse, count: C.running },
-  { id: "review", tkey: "nav_review", icon: Icon.alert, count: C.blocked },
-  { id: "pending", tkey: "nav_pending", icon: Icon.clock },
-  { id: "queue", tkey: "nav_queue", icon: Icon.clock, count: C.waiting },
-  { id: "completed", tkey: "nav_completed", icon: Icon.check, count: C.done },
-];
 const WORKSPACE: NavItem[] = [{ id: "repos", tkey: "nav_repos", icon: Icon.folder }];
+
+// Catégorie « Flotte » : les états live des agents (compteurs passés par le parent).
+function fleetNav(counts: FleetCounts): NavItem[] {
+  return [
+    { id: "running", tkey: "nav_running", icon: Icon.pulse, count: counts.running },
+    { id: "review", tkey: "nav_review", icon: Icon.alert, count: counts.blocked },
+    { id: "pending", tkey: "nav_pending", icon: Icon.clock },
+    { id: "queue", tkey: "nav_queue", icon: Icon.clock, count: counts.waiting },
+    { id: "completed", tkey: "nav_completed", icon: Icon.check, count: counts.done },
+  ];
+}
 
 // "Bonjour Mr Sultan" — civilité genrée + nom (repli sur le préfixe d'email).
 function greeting(me: Me | null, t: (k: string) => string): string | null {
@@ -51,6 +47,7 @@ export function Sidebar({
   onNew,
   onLogout,
   me,
+  counts,
 }: {
   view: string;
   onNav: (v: string) => void;
@@ -58,10 +55,12 @@ export function Sidebar({
   onNew: () => void;
   onLogout: () => void;
   me: Me | null;
+  counts: FleetCounts;
 }) {
   const canAdmin = me?.role === "admin";
   const { t } = useI18n();
   const hello = greeting(me, t);
+  const FLEET = fleetNav(counts);
   const item = (it: NavItem) => (
     <button
       key={it.id}
@@ -191,6 +190,7 @@ export function Shell({
   onCommand,
   onBell,
   badge,
+  counts,
   children,
 }: {
   title: string;
@@ -207,11 +207,12 @@ export function Shell({
   onCommand: () => void;
   onBell: () => void;
   badge: number;
+  counts: FleetCounts;
   children: ReactNode;
 }) {
   return (
     <div className={"app" + (collapsed ? " nav-collapsed" : "")}>
-      <Sidebar view={view} onNav={onNav} canNew={canNew} onNew={onNew} onLogout={onLogout} me={me} />
+      <Sidebar view={view} onNav={onNav} canNew={canNew} onNew={onNew} onLogout={onLogout} me={me} counts={counts} />
       <main className="main">
         <Topbar
           title={title} theme={theme} onToggleTheme={onToggleTheme} onCommand={onCommand}

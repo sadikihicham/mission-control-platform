@@ -36,11 +36,7 @@ import { Sentinel } from "@/components/mc/Sentinel";
 import { Admin } from "@/components/mc/Admin";
 import { CommandPalette } from "@/components/mc/Command";
 import { TweaksPanel, applyTweaks, TWEAK_DEFAULTS, type Tweaks } from "@/components/mc/Tweaks";
-import { AGENTS } from "@/lib/mc-data";
 import { useI18n } from "@/lib/i18n";
-
-// Badge de la cloche = nombre d'agents bloqués (flotte mock du design).
-const REVIEW_BADGE = AGENTS.filter((a: { status: string }) => a.status === "blocked").length;
 
 // Vues qui rendent la flotte réelle (Overview) avec un filtre de statut.
 const OVERVIEW_FILTER: Record<string, string> = {
@@ -202,15 +198,16 @@ export default function Home() {
     return () => { alive = false; clearInterval(id); };
   }, [token, selected, signal]);
 
-  // Flotte (vue d'ensemble + filtres de statut) : tous les agents (poll + signal).
+  // Flotte réelle : tous les agents, poll permanent (alimente le badge cloche,
+  // la commande palette et les vues Overview — pas seulement quand elles sont affichées).
   useEffect(() => {
-    if (!token || !(view in OVERVIEW_FILTER)) return;
+    if (!token) return;
     let alive = true;
     const tick = async () => { try { const a = await getAgents(); if (alive) setAgents(a); } catch { /* */ } };
     tick();
     const id = setInterval(tick, 5000);
     return () => { alive = false; clearInterval(id); };
-  }, [token, view, signal]);
+  }, [token, signal]);
 
   // Garde les vitals de l'agent ouvert à jour pendant le poll.
   useEffect(() => {
@@ -224,6 +221,14 @@ export default function Home() {
 
   const logout = () => { markLoggedOut(); clearToken(); setTokenState(null); setSelected(null); setSelectedAgent(null); };
   const writer = canWrite(role);
+  // Compteurs de la sidebar + badge cloche : dérivés de la flotte live (plus la mock du design).
+  const fleetCounts = {
+    running: agents.filter((a) => a.state === "working").length,
+    blocked: agents.filter((a) => a.state === "blocked").length,
+    waiting: agents.filter((a) => a.state === "idle").length,
+    done: agents.filter((a) => a.state === "done").length,
+  };
+  const reviewBadge = fleetCounts.blocked;
   const isOverview = view in OVERVIEW_FILTER;
   const isProjects = view === "projects" || view === "repos";
   const title =
@@ -277,7 +282,6 @@ export default function Home() {
   } else if (view === "audit") {
     body = (
       <Audit
-        agents={AGENTS}
         actions={{
           goReview: () => { setView("review"); setSelected(null); setSelectedAgent(null); },
           goFleet: () => { setView("overview"); setSelected(null); setSelectedAgent(null); },
@@ -308,7 +312,8 @@ export default function Home() {
         onLogout={logout}
         onCommand={() => setCmdOpen(true)}
         onBell={() => { setView("review"); setSelected(null); setSelectedAgent(null); }}
-        badge={REVIEW_BADGE}
+        badge={reviewBadge}
+        counts={fleetCounts}
       >
         {body}
       </Shell>
