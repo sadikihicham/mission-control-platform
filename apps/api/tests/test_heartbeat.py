@@ -1,4 +1,8 @@
 """Ingest heartbeat (Contract D) → DB."""
+from sqlalchemy import select
+
+from apps.api.models import Agent
+from apps.api.services.mc_sync import AGENT_SOURCE_MC_FILE
 from apps.api.tests.conftest import auth
 
 HB = {"Content-Type": "application/json"}
@@ -68,6 +72,26 @@ def test_heartbeat_enroll_issues_agent_token(client):
     )
     assert r3.status_code == 202
     assert "agent_token" not in r3.json()
+
+
+def test_heartbeat_strips_client_supplied_source_from_meta(client, db):
+    """`meta.source` est une provenance dérivée serveur (mc_sync.AGENT_SOURCE_MC_FILE) — un
+    client heartbeat ne doit jamais pouvoir se faire passer pour un agent issu des fichiers
+    mc, sinon le prochain sync_once() le purgerait par erreur au lieu de le laisser tranquille."""
+    r = client.post(
+        "/agents/heartbeat",
+        headers={"X-MC-Token": "test-ingest"},
+        json={
+            "agent": "spoof-source",
+            "state": "idle",
+            "meta": {"source": AGENT_SOURCE_MC_FILE, "extra": "kept"},
+        },
+    )
+    assert r.status_code == 202
+
+    agent = db.scalar(select(Agent).where(Agent.agent_key == "spoof-source"))
+    assert agent.meta.get("source") is None
+    assert agent.meta.get("extra") == "kept"
 
 
 def test_revoke_agent_token(client, admin_token, viewer_token):
