@@ -46,3 +46,24 @@ class PermissionDenied(HostIntegrationError):
 
     code = ErrorCode.permission_denied
     http_status = 403
+
+
+class CredentialInvalid(HostIntegrationError):
+    """Credential agent absent, malformé ou empreinte non concordante (fail-closed)."""
+
+    code = ErrorCode.credential_invalid
+    http_status = 401
+
+
+class CredentialRevoked(HostIntegrationError):
+    """Credential agent révoqué ou expiré — refusé immédiatement, sans grâce."""
+
+    code = ErrorCode.credential_revoked
+    http_status = 403
+
+
+class ValidationFailed(HostIntegrationError):
+    """Corps/paramètres V1 invalides (ex. batch d'événements trop grand)."""
+
+    code = ErrorCode.validation_error
+    http_status = 422

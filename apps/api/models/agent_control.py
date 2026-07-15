@@ -17,7 +17,17 @@ lignes tenant (FK `installation_id` en RESTRICT).
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import (
+    BigInteger,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -159,3 +169,92 @@ class AgentCredential(Base):
         if self.expires_at is not None and self.expires_at <= datetime.now(UTC):
             return "expired"
         return "active"
+
+
+class AgentEvent(Base):
+    """Journal append-only des événements V1 ingérés (§8/§10 du contrat V1).
+
+    Source de vérité historique : PostgreSQL. Les événements sont **persistés
+    avant toute diffusion** (l'outbox est écrit dans la même transaction, ADR-0005).
+    Idempotence par producteur : `(agent_id, event_id)` unique — rejouer le même
+    batch ne duplique rien. `sequence` est monotone par agent (`agents.last_sequence`).
+
+    Aucune cascade destructive : FK `agent_id`/`installation_id` en RESTRICT —
+    l'historique n'est jamais effacé par la suppression d'un agent/tenant. Pas de
+    prompt/secret brut : la redaction est appliquée en amont par le producteur/service.
+    """
+
+    __tablename__ = "agent_events"
+    __table_args__ = (
+        # Idempotence : un `event_id` est unique DANS la portée d'un agent.
+        UniqueConstraint("agent_id", "event_id", name="uq_agent_events_agent_event"),
+        # Pagination temporelle tenant-scoped (occurred_at DESC, id DESC).
+        Index("ix_agent_events_installation_occurred", "installation_id", "occurred_at"),
+        # Reprise/détection de trou par séquence agent.
+        Index("ix_agent_events_agent_sequence", "agent_id", "sequence"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    # Tenant (installation) résolu serveur depuis le credential — jamais du body.
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="RESTRICT"), index=True
+    )
+    # Idempotency key du producteur (opaque, ex. uuid).
+    event_id: Mapped[str] = mapped_column(String(255))
+    sequence: Mapped[int] = mapped_column(BigInteger)
+    event_type: Mapped[str] = mapped_column(String(80))
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    request_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Contextuels (facultatifs). `run_id` : pas de FK ici — `agent_runs` arrive au
+    # lot P4 ; on stocke l'uuid brut pour ne pas coupler l'ingest à une table
+    # non encore livrée. Idem project_id/task_id (souples, non contraints V1).
+    run_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    project_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    task_id: Mapped[uuid.UUID | None] = mapped_column(nullable=True)
+    trace_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    client_version: Mapped[str | None] = mapped_column(String(60), nullable=True)
+
+
+class MCOutboxEvent(Base):
+    """Outbox transactionnel (ADR-0005) : écrit avec le fait métier, relayé ensuite.
+
+    Le relais (lot SP4/SP6) lit les lignes `pending`, publie vers Redis (canal V1
+    `ac:events`) / notifications / webhooks, puis marque `published`. Livraison
+    **au moins une fois** ; les consommateurs déduplifient par `event_id`. Un Redis
+    indisponible ne perd jamais le fait métier (il reste `pending` en base).
+    """
+
+    __tablename__ = "mc_outbox_events"
+    __table_args__ = (
+        # Le relais balaye les lignes à publier par ordre de création.
+        Index("ix_mc_outbox_status_created", "status", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    # `event_id` d'origine (idempotence côté consommateur / corrélation agent_events).
+    event_id: Mapped[str] = mapped_column(String(255), index=True)
+    event_type: Mapped[str] = mapped_column(String(80))
+    # Topic WS V1 cible (fleet, agent:{id}, run:{id}, …) — validé serveur (§10).
+    topic: Mapped[str] = mapped_column(String(160))
+    sequence: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Charge à diffuser (le `data` du WsMessageV1), déjà redacted en amont.
+    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    # pending | published | failed
+    status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -6,7 +6,9 @@ from apps.api.models.agent_control import (
     LOCAL_INSTALLATION_ID,
     LOCAL_INSTALLATION_KEY,
     AgentCredential,
+    AgentEvent,
     MCInstallation,
+    MCOutboxEvent,
     MCUserMapping,
 )
 from apps.api.models.enums import AgentState, ProjectStatus
@@ -31,6 +33,8 @@ __all__ = [
     "MCInstallation",
     "MCUserMapping",
     "AgentCredential",
+    "AgentEvent",
+    "MCOutboxEvent",
     "LOCAL_INSTALLATION_ID",
     "LOCAL_INSTALLATION_KEY",
 ]
