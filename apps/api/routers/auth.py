@@ -34,6 +34,11 @@ _RESET_TTL_MINUTES = 30
 _LOGIN_RATE_LIMIT = 10
 _LOGIN_RATE_WINDOW_SECONDS = 600
 
+# Même garde sur /auth/change-password : un JWT volé/partagé ne doit pas pouvoir
+# deviner le mot de passe actuel par force brute avant de le remplacer.
+_CHANGE_PASSWORD_RATE_LIMIT = 10
+_CHANGE_PASSWORD_RATE_WINDOW_SECONDS = 600
+
 
 def _is_trusted_proxy(peer: str) -> bool:
     """`settings.trusted_proxies` accepte des IP littérales ou des noms résolvables par
@@ -244,10 +249,26 @@ def me(user: User = Depends(get_current_user)) -> User:
 @router.post("/auth/change-password", response_model=MessageOut)
 def change_password(
     body: ChangePasswordIn,
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MessageOut:
     """Self-service : l'utilisateur connecté change SON PROPRE mot de passe."""
+    if settings.environment.lower().startswith("prod"):
+        ip_ok = check_and_increment(
+            f"ratelimit:change-password:ip:{_client_ip(request)}",
+            limit=_CHANGE_PASSWORD_RATE_LIMIT,
+            window_seconds=_CHANGE_PASSWORD_RATE_WINDOW_SECONDS,
+        )
+        user_ok = check_and_increment(
+            f"ratelimit:change-password:user:{user.id}",
+            limit=_CHANGE_PASSWORD_RATE_LIMIT,
+            window_seconds=_CHANGE_PASSWORD_RATE_WINDOW_SECONDS,
+        )
+        if not ip_ok or not user_ok:
+            raise HTTPException(
+                status.HTTP_429_TOO_MANY_REQUESTS, "trop de tentatives, réessayez plus tard"
+            )
     if not verify_password(body.current_password, user.hashed_password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "mot de passe actuel incorrect")
     user.hashed_password = hash_password(body.new_password)

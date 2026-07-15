@@ -1,4 +1,5 @@
-"""Rate-limit fixe (core/ratelimit.py) + garde brute-force sur /auth/login en prod."""
+"""Rate-limit fixe (core/ratelimit.py) + garde brute-force sur /auth/login et
+/auth/change-password en prod."""
 import socket
 import uuid
 
@@ -6,6 +7,7 @@ import redis
 
 from apps.api.core import ratelimit
 from apps.api.core.redis import get_sync_redis
+from apps.api.tests.conftest import auth
 
 
 def _unique_key() -> str:
@@ -184,3 +186,51 @@ def test_login_not_rate_limited_outside_prod(client):
             "/auth/login", json={"email": "admin@mc.local", "password": "WRONG"}, headers=headers
         )
     assert r.status_code == 401
+
+
+def test_change_password_rate_limited_in_prod(client, make_user, monkeypatch):
+    """Un JWT volé/partagé ne doit pas pouvoir deviner le mot de passe actuel par
+    force brute via /auth/change-password — même garde IP+utilisateur qu'au login."""
+    from apps.api.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "trusted_proxies", [])
+    email = make_user(password="initial1")
+    token = client.post("/auth/login", json={"email": email, "password": "initial1"}).json()[
+        "access_token"
+    ]
+    user_id = client.get("/auth/me", headers=auth(token)).json()["id"]
+    ip_key = "ratelimit:change-password:ip:testclient"
+    user_key = f"ratelimit:change-password:user:{user_id}"
+    try:
+        for _ in range(10):
+            client.post(
+                "/auth/change-password",
+                json={"current_password": "WRONG", "new_password": "brandnew1"},
+                headers=auth(token),
+            )
+        r = client.post(
+            "/auth/change-password",
+            json={"current_password": "WRONG", "new_password": "brandnew1"},
+            headers=auth(token),
+        )
+        assert r.status_code == 429
+    finally:
+        get_sync_redis().delete(ip_key)
+        get_sync_redis().delete(user_key)
+
+
+def test_change_password_not_rate_limited_outside_prod(client, make_user):
+    # Même garde qu'au login : hors prod, jamais de 429 même après de nombreuses
+    # tentatives (les fixtures/tests appellent cette route en boucle).
+    email = make_user(password="initial1")
+    token = client.post("/auth/login", json={"email": email, "password": "initial1"}).json()[
+        "access_token"
+    ]
+    for _ in range(12):
+        r = client.post(
+            "/auth/change-password",
+            json={"current_password": "WRONG", "new_password": "brandnew1"},
+            headers=auth(token),
+        )
+    assert r.status_code == 400
