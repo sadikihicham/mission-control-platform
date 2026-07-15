@@ -37,7 +37,6 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     # Civilité : "mr" | "mrs" | "miss" — pilote le message d'accueil genré.
     civility: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     # Désactivation = soft-delete (rubrique Administration) : jamais de hard-delete
     # d'un compte, un utilisateur inactif garde son historique mais ne peut plus
     # se connecter (cf. routers/auth.py login() + get_current_user()).
@@ -57,7 +56,6 @@ class Project(Base):
     )
     progress: Mapped[int] = mapped_column(Integer, default=0)
     repo: Mapped[str | None] = mapped_column(String(255), nullable=True)  # "owner/name" GitHub
-    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

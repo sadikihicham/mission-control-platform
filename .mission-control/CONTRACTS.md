@@ -9,7 +9,11 @@
 1. **Temps réel** : WebSocket **natif** (FastAPI `WebSocket` + client WS natif côté web). Pas de Socket.IO.
 2. **Agent CLI** : **Python stdlib (`argparse`), zéro dépendance** — décision initiale (`Typer`)
    abandonnée en cours de build (cf. `apps/agent-cli/pyproject.toml` : `dependencies = []`).
-3. **Multi-tenant** : colonne `company_id` (nullable) réservée dès maintenant sur `users`/`projects` ; **isolation (RLS) reportée en V1**.
+3. **Multi-tenant** : abandonné pour ce MVP. La colonne `company_id` (nullable) réservée dès le
+   schéma initial n'a jamais été branchée à un filtre (`RLS` reportée en V1 jamais démarrée) — retirée
+   par la migration `0007_drop_company_id` plutôt que laissée comme faux signal d'isolation
+   (finding `project-cartographer`). Si le multi-tenant redémarre, colonne + filtre actif reviendront
+   ensemble dans le même changement.
 4. **TUI** : on **réutilise le skill `mission-control`**. Le contrat heartbeat (D) est volontairement aligné sur le JSON `mc` pour que le TUI marche sans adaptation.
 
 ## Layout monorepo (posé par `socle`)
@@ -29,8 +33,8 @@ docs/
 
 Tables core MVP (SQLAlchemy + Alembic) :
 
-- **users**: `id` (uuid pk), `email` (unique), `hashed_password`, `role` (str, défaut `admin`), `full_name` (null), `civility` (null — `mr|mrs|miss`, message d'accueil genré, migration `0004`), `company_id` (uuid null), `created_at`
-- **projects**: `id` (uuid pk), `slug` (unique), `name`, `description` (null), `status` (enum: `proposed|validated|in_dev|done|archived`, défaut `in_dev`), `progress` (int 0-100, défaut 0), `repo` (null — `"owner/name"` GitHub, migration `0002`), `company_id` (uuid null), `created_at`, `updated_at`
+- **users**: `id` (uuid pk), `email` (unique), `hashed_password`, `role` (str, défaut `admin`), `full_name` (null), `civility` (null — `mr|mrs|miss`, message d'accueil genré, migration `0004`), `is_active` (bool défaut `true`, migration `0006`), `created_at`
+- **projects**: `id` (uuid pk), `slug` (unique), `name`, `description` (null), `status` (enum: `proposed|validated|in_dev|done|archived`, défaut `in_dev`), `progress` (int 0-100, défaut 0), `repo` (null — `"owner/name"` GitHub, migration `0002`), `created_at`, `updated_at`
 - **agents**: `id` (uuid pk), `agent_key` (str unique — = champ `agent` du heartbeat), `project_id` (fk null), `state` (enum: `idle|working|blocked|done|error|stale`), `task` (null), `progress` (int défaut 0), `module` (null), `branch` (null), `blocker` (null), `meta` (jsonb défaut `{}`), `last_heartbeat` (ts null), `updated_at`
 - **tasks**: `id` (uuid pk), `project_id` (fk), `agent_id` (fk null), `title`, `status` (str défaut `todo`), `created_at`
 - **activity_logs**: `id` (uuid pk), `agent_id` (fk null), `project_id` (fk null), `type` (str), `payload` (jsonb), `created_at`
@@ -48,7 +52,7 @@ Tables core MVP (SQLAlchemy + Alembic) :
 - `GET /auth/users` → `[{ id, email, role, full_name, civility }]` — **admin uniquement**
 - JWT Bearer, claims `{ "sub": <user_id>, "role": str, "exp": int }`, algo HS256, secret depuis env `JWT_SECRET`.
 - Dépendance FastAPI réutilisable : `from apps.api.routers.auth import get_current_user, require_role` → `require_role(minimum)` autorise tout rôle ≥ `minimum`.
-- RBAC (`viewer < developer < pm < cto < admin`, `apps/api/core/roles.py`) est **déjà implémenté**, pas reporté à plus tard — seuls le multi-tenant (`company_id`) et son isolation (RLS) restent en V1 (§7 ci-dessus).
+- RBAC (`viewer < developer < pm < cto < admin`, `apps/api/core/roles.py`) est **déjà implémenté**, pas reporté à plus tard. Le multi-tenant est abandonné pour ce MVP (§7 ci-dessus, `company_id` retirée).
 
 ---
 
