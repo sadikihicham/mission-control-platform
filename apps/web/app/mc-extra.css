@@ -3,6 +3,19 @@
 .badge.st-mini { background: var(--bg-3); color: var(--tx-mid); border: 1px solid var(--border); }
 .badge.st-mini .dot { display: none; }
 
+/* ---- Administration (rubrique admin-only : utilisateurs + identifiants agents) ---- */
+.adm-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.adm-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.adm-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: var(--bg-1); border: 1px solid var(--border-soft); border-radius: var(--r-md);
+}
+.adm-id { flex: 1; min-width: 0; }
+.adm-id .nm { font-weight: 600; font-size: 13.5px; }
+.adm-id .ds { font-size: 12px; color: var(--tx-lo); font-family: var(--mono); }
+.adm-row .ds { flex: none; }
+.err { color: var(--block); font-size: 12px; }
+
 .pcard-del {
   display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: var(--r-sm);
   color: var(--tx-lo); cursor: pointer;

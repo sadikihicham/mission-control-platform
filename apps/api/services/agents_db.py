@@ -34,6 +34,7 @@ def _to_out(agent: Agent) -> AgentOut:
         tasks_total=meta.get("tasks_total"),
         updated_at=agent.last_heartbeat.isoformat() if agent.last_heartbeat else None,
         age_seconds=age,
+        token_issued_at=agent.token_issued_at.isoformat() if agent.token_issued_at else None,
     )
 
 

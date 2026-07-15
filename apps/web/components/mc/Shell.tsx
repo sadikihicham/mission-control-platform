@@ -59,6 +59,7 @@ export function Sidebar({
   onLogout: () => void;
   me: Me | null;
 }) {
+  const canAdmin = me?.role === "admin";
   const { t } = useI18n();
   const hello = greeting(me, t);
   const item = (it: NavItem) => (
@@ -100,6 +101,12 @@ export function Sidebar({
         {FLEET.map(item)}
         <div className="nav-label">{t("sec_workspace")}</div>
         {WORKSPACE.map(item)}
+        {canAdmin && (
+          <>
+            <div className="nav-label">{t("nav_admin")}</div>
+            {item({ id: "admin", tkey: "nav_admin", icon: Icon.shield })}
+          </>
+        )}
       </div>
       <button className="nav-item logout-item" onClick={onLogout} title={t("logout")}>
         {Icon.logout({})}<span>{t("logout")}</span>

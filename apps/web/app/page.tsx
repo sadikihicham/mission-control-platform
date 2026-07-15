@@ -33,6 +33,7 @@ import { HierarchyFlow } from "@/components/mc/HierarchyFlow";
 import { Audit } from "@/components/mc/Audit";
 import { Cost } from "@/components/mc/Cost";
 import { Sentinel } from "@/components/mc/Sentinel";
+import { Admin } from "@/components/mc/Admin";
 import { CommandPalette } from "@/components/mc/Command";
 import { TweaksPanel, applyTweaks, TWEAK_DEFAULTS, type Tweaks } from "@/components/mc/Tweaks";
 import { AGENTS } from "@/lib/mc-data";
@@ -49,7 +50,7 @@ const TITLE_KEY: Record<string, string> = {
   home: "nav_home", overview: "nav_mission", projects: "nav_projects", departments: "nav_depts",
   hierarchy: "nav_hierarchy", cost: "nav_cost", audit: "nav_audit",
   running: "nav_running", review: "nav_review", pending: "nav_pending", queue: "nav_queue", completed: "nav_completed",
-  repos: "nav_repos",
+  repos: "nav_repos", admin: "nav_admin",
 };
 
 function NewProjectForm({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
@@ -271,6 +272,8 @@ export default function Home() {
     body = <HierarchyFlow onOpenAgent={() => { setView("overview"); setSelected(null); setSelectedAgent(null); }} />;
   } else if (view === "cost") {
     body = <Cost />;
+  } else if (view === "admin") {
+    body = me?.role === "admin" ? <Admin meId={me.id} /> : null;
   } else if (view === "audit") {
     body = (
       <Audit
