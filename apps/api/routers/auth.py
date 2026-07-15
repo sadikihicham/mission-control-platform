@@ -35,10 +35,21 @@ _LOGIN_RATE_WINDOW_SECONDS = 600
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    """IP à utiliser pour le rate-limit. Le peer TCP direct par défaut ;
+    `X-Forwarded-For` n'est honoré que si ce peer est un proxy de confiance
+    (`settings.trusted_proxies`), sinon n'importe quel client peut forger
+    l'en-tête pour obtenir un nouveau compteur à chaque requête. Quand il est
+    honoré, on prend le dernier maillon de la chaîne : c'est celui ajouté par
+    notre proxy de confiance, tout ce qui précède peut avoir été forgé plus
+    loin en amont."""
+    peer = request.client.host if request.client else None
+    if peer and peer in settings.trusted_proxies:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+            if hops:
+                return hops[-1]
+    return peer or "unknown"
 
 router = APIRouter(tags=["auth"])
 _bearer = HTTPBearer(auto_error=False)
@@ -65,10 +76,21 @@ class MeOut(BaseModel):
 @router.post("/auth/login", response_model=TokenOut)
 def login(body: LoginIn, request: Request, db: Session = Depends(get_db)) -> TokenOut:
     if settings.environment.lower().startswith("prod"):
-        key = f"ratelimit:login:{_client_ip(request)}"
-        if not check_and_increment(
-            key, limit=_LOGIN_RATE_LIMIT, window_seconds=_LOGIN_RATE_WINDOW_SECONDS
-        ):
+        # Deux clés indépendantes : l'IP seule est contournable par rotation
+        # (via un proxy de confiance légitime qui honore des IPs client
+        # changeantes) ; l'email seul serait contournable si un attaquant visait
+        # des comptes différents. Les deux ensemble bornent chaque axe.
+        ip_ok = check_and_increment(
+            f"ratelimit:login:ip:{_client_ip(request)}",
+            limit=_LOGIN_RATE_LIMIT,
+            window_seconds=_LOGIN_RATE_WINDOW_SECONDS,
+        )
+        email_ok = check_and_increment(
+            f"ratelimit:login:email:{body.email.strip().lower()}",
+            limit=_LOGIN_RATE_LIMIT,
+            window_seconds=_LOGIN_RATE_WINDOW_SECONDS,
+        )
+        if not ip_ok or not email_ok:
             raise HTTPException(
                 status.HTTP_429_TOO_MANY_REQUESTS, "trop de tentatives, réessayez plus tard"
             )
