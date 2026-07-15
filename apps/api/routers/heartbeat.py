@@ -12,6 +12,10 @@ from sqlalchemy.orm import Session
 from apps.api.core.config import settings
 from apps.api.core.db import get_db
 from apps.api.core.redis import publish_event
+
+# generate_reset_token/hash_reset_token sont génériques (secret brut + hash SHA-256 à
+# stocker) : réutilisés tels quels pour les tokens d'agent, pas de nouvelle primitive.
+from apps.api.core.security import generate_reset_token, hash_reset_token
 from apps.api.models import ActivityLog, Agent, AgentState, Project
 from apps.api.schemas.heartbeat import AgentDTO, HeartbeatIn
 from apps.api.services.events import publish_stats
@@ -37,10 +41,23 @@ def _to_dto(agent: Agent) -> dict:
 def heartbeat(
     body: HeartbeatIn,
     x_mc_token: str | None = Header(default=None, alias="X-MC-Token"),
+    x_mc_enroll: str | None = Header(default=None, alias="X-MC-Enroll"),
     db: Session = Depends(get_db),
 ) -> dict:
-    if not secrets.compare_digest(x_mc_token or "", settings.mc_ingest_token):
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "token d'ingest invalide")
+    agent = db.scalar(select(Agent).where(Agent.agent_key == body.agent))
+    already_enrolled = agent is not None and agent.token_hash is not None
+
+    if already_enrolled:
+        # Agent enrôlé : seul son propre token fait foi, le secret partagé ne suffit plus.
+        if not secrets.compare_digest(hash_reset_token(x_mc_token or ""), agent.token_hash):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "token d'agent invalide")
+    else:
+        if not secrets.compare_digest(x_mc_token or "", settings.mc_ingest_token):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "token d'ingest invalide")
+
+    # Enrôlement opt-in : un client non mis à jour n'envoie jamais X-MC-Enroll et
+    # garde donc exactement le comportement d'avant (secret partagé à chaque appel).
+    issue_token = x_mc_enroll == "1" and not already_enrolled
 
     try:
         state = AgentState(body.state)
@@ -50,8 +67,7 @@ def heartbeat(
         # `stale` est dérivé côté serveur (silence > seuil), jamais ingéré.
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "état 'stale' non ingérable (dérivé serveur)")
 
-    # Upsert par agent_key.
-    agent = db.scalar(select(Agent).where(Agent.agent_key == body.agent))
+    # Upsert par agent_key (agent déjà chargé plus haut pour la vérif d'auth).
     if agent is None:
         agent = Agent(agent_key=body.agent)
         db.add(agent)
@@ -82,6 +98,12 @@ def heartbeat(
         if project:
             agent.project_id = project.id
 
+    issued_token: str | None = None
+    if issue_token:
+        issued_token = generate_reset_token()
+        agent.token_hash = hash_reset_token(issued_token)
+        agent.token_issued_at = datetime.now(UTC)
+
     db.flush()  # assigne agent.id avant le log
     db.add(
         ActivityLog(
@@ -96,4 +118,9 @@ def heartbeat(
 
     publish_event("agent.update", _to_dto(agent))
     publish_stats()
-    return {"ok": True, "agent": agent.agent_key, "state": agent.state.value}
+    resp = {"ok": True, "agent": agent.agent_key, "state": agent.state.value}
+    if issued_token:
+        # Émis une seule fois, à l'enrôlement — jamais renvoyé ensuite (agent.token_hash
+        # n'est stocké qu'en hash, le brut n'existe que dans cette réponse).
+        resp["agent_token"] = issued_token
+    return resp
