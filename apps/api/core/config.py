@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # Ingest heartbeat (Contract D)
     mc_ingest_token: str = "dev-ingest-token"
 
+    # Rate-limit login (interne, hors CONTRACTS.md) : IP du peer TCP direct par défaut.
+    # `X-Forwarded-For` n'est honoré que si ce peer figure ici (reverse proxy de
+    # confiance placé devant l'API) — sinon un client peut forger l'en-tête pour
+    # obtenir un nouveau compteur à chaque requête et contourner la limite. Vide par
+    # défaut = ne jamais faire confiance à l'en-tête.
+    trusted_proxies: list[str] = []
+
     # Source des statuts du skill mission-control (fast-path lecture seule).
     # Alimente le dashboard tant que la pipeline DB/ingest (M3) n'est pas livrée.
     mc_status_dir: str = ".mission-control/status"

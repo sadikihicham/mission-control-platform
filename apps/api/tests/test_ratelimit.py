@@ -43,20 +43,78 @@ def test_login_rate_limited_in_prod(client, monkeypatch):
     from apps.api.core.config import settings
 
     monkeypatch.setattr(settings, "environment", "production")
-    ip = f"test-{uuid.uuid4().hex}"
-    key = f"ratelimit:login:{ip}"
-    headers = {"X-Forwarded-For": ip}
+    monkeypatch.setattr(settings, "trusted_proxies", [])
+    email = f"ratelimited-{uuid.uuid4().hex}@mc.local"
+    ip_key = "ratelimit:login:ip:testclient"
+    email_key = f"ratelimit:login:email:{email}"
     try:
         for _ in range(10):
+            client.post("/auth/login", json={"email": email, "password": "WRONG"})
+        r = client.post("/auth/login", json={"email": email, "password": "WRONG"})
+        assert r.status_code == 429
+    finally:
+        get_sync_redis().delete(ip_key)
+        get_sync_redis().delete(email_key)
+
+
+def test_xff_spoofing_no_longer_bypasses_ip_limit(client, monkeypatch):
+    """Régression : sans proxy de confiance déclaré, un `X-Forwarded-For` différent
+    à chaque requête (et un email différent à chaque fois) ne doit plus permettre de
+    contourner la limite — seul le vrai peer TCP compte."""
+    from apps.api.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "trusted_proxies", [])
+    ip_key = "ratelimit:login:ip:testclient"
+    emails = [f"spoof-{uuid.uuid4().hex}@mc.local" for _ in range(11)]
+    try:
+        for i, email in enumerate(emails[:10]):
             client.post(
-                "/auth/login", json={"email": "admin@mc.local", "password": "WRONG"}, headers=headers
+                "/auth/login",
+                json={"email": email, "password": "WRONG"},
+                headers={"X-Forwarded-For": f"1.2.3.{i}"},
             )
         r = client.post(
-            "/auth/login", json={"email": "admin@mc.local", "password": "WRONG"}, headers=headers
+            "/auth/login",
+            json={"email": emails[10], "password": "WRONG"},
+            headers={"X-Forwarded-For": "9.9.9.9"},
         )
         assert r.status_code == 429
     finally:
-        get_sync_redis().delete(key)
+        get_sync_redis().delete(ip_key)
+        for email in emails:
+            get_sync_redis().delete(f"ratelimit:login:email:{email}")
+
+
+def test_xff_honored_behind_trusted_proxy_but_email_key_still_limits(client, monkeypatch):
+    """Derrière un proxy de confiance déclaré, `X-Forwarded-For` est honoré (IPs
+    client distinctes = compteurs distincts, comportement voulu) — mais la 2e clé
+    par email empêche qu'un attaquant contourne la limite en faisant simplement
+    tourner ses IPs source contre un seul compte."""
+    from apps.api.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "trusted_proxies", ["testclient"])
+    email = f"rotated-ip-{uuid.uuid4().hex}@mc.local"
+    email_key = f"ratelimit:login:email:{email}"
+    ips = [f"10.0.0.{i}" for i in range(11)]
+    try:
+        for ip in ips[:10]:
+            client.post(
+                "/auth/login",
+                json={"email": email, "password": "WRONG"},
+                headers={"X-Forwarded-For": ip},
+            )
+        r = client.post(
+            "/auth/login",
+            json={"email": email, "password": "WRONG"},
+            headers={"X-Forwarded-For": ips[10]},
+        )
+        assert r.status_code == 429
+    finally:
+        get_sync_redis().delete(email_key)
+        for ip in ips:
+            get_sync_redis().delete(f"ratelimit:login:ip:{ip}")
 
 
 def test_login_not_rate_limited_outside_prod(client):
