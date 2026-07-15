@@ -3,65 +3,31 @@
 export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
+// Types DTO GÉNÉRÉS depuis l'OpenAPI de l'API (source de vérité, plus aucune
+// duplication manuelle) — cf. packages/contracts/ + lib/contracts.ts.
+// Régénération : `make contracts`.
+import type {
+  ActivityOut,
+  AgentOut,
+  DashboardStats as DashboardStatsDTO,
+  MeOut,
+  ProjectDetail as ProjectDetailDTO,
+  ProjectSummary as ProjectSummaryDTO,
+  SubTask as SubTaskDTO,
+  Task as TaskDTO,
+} from "./contracts";
+
+// Union d'états d'agent : affinage local (l'OpenAPI expose `state` en `string`).
 export type AgentState =
   | "idle" | "working" | "blocked" | "done" | "error" | "stale";
 
-export type Agent = {
-  agent: string;
-  state: AgentState;
-  task: string | null;
-  module: string | null;
-  label: string | null;
-  branch: string | null;
-  blocker: string | null;
-  progress: number;
-  tasks_done: number | null;
-  tasks_total: number | null;
-  updated_at: string | null;
-  age_seconds: number | null;
-  // Identité par agent (Contract D) : date d'enrôlement, ou null s'il tourne
-  // encore avec le secret partagé MC_INGEST_TOKEN.
-  token_issued_at: string | null;
-};
-
-export type SubTask = {
-  title: string;
-  progress: number;
-  state: string;
-  agent: string | null;
-};
-
-export type Task = {
-  id: string;
-  title: string;
-  module: string | null;
-  progress: number;
-  state: AgentState;
-  agents: Agent[];
-  subtasks: SubTask[];
-};
-
-export type ProjectSummary = {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  progress: number;
-  tasks_total: number;
-  tasks_done: number;
-  agents_total: number;
-  agents_active: number;
-  agents_blocked: number;
-  // Droit d'édition calculé côté API selon le rôle de l'appelant.
-  editable?: boolean;
-};
-
-export type ProjectDetail = ProjectSummary & {
-  tasks: Task[];
-  agents: Agent[];
-  // Dépôt GitHub associé (lié via PATCH /projects/{id}).
-  repo?: string | null;
-};
+// Ré-exports : les vues consomment ces alias, désormais adossés aux types générés.
+export type Agent = AgentOut;
+export type SubTask = SubTaskDTO;
+export type Task = TaskDTO;
+export type ProjectSummary = ProjectSummaryDTO;
+export type ProjectDetail = ProjectDetailDTO;
+export type DashboardStats = DashboardStatsDTO;
 
 /* ---------- Auth (JWT en localStorage) ---------- */
 
@@ -184,26 +150,16 @@ export type GitInfo = {
 export const getProjectGit = (id: string) => get<GitInfo>(`/projects/${id}/git`);
 export const getAgents = () => get<Agent[]>("/agents");
 
-export type Activity = {
-  type: string;
-  state: string | null;
-  task: string | null;
-  progress: number | null;
-  created_at: string | null;
-};
+export type Activity = ActivityOut;
 export const getAgentActivity = (key: string) =>
   get<Activity[]>(`/agents/${encodeURIComponent(key)}/activity`);
 
+// KPIs dashboard (Contract C) — typés depuis l'OpenAPI généré.
+export const getStats = () => get<DashboardStats>("/stats/dashboard");
+
 /* ---------- Écriture (CRUD projets, rôle pm+) ---------- */
 
-export type Me = {
-  id: string;
-  email: string;
-  role: string;
-  full_name: string | null;
-  civility: string | null;
-  is_active: boolean;
-};
+export type Me = MeOut;
 export const getMe = () => get<Me>("/auth/me");
 
 export const WRITE_ROLES = ["pm", "cto", "admin"];

@@ -29,6 +29,9 @@ redis-cli: ## Ouvre redis-cli
 seed: ## (Re)joue le seed
 	$(COMPOSE) exec ag-api python -m apps.api.seed
 
+contracts: ## Régénère les types TS depuis l'OpenAPI (packages/contracts + lib/contracts.ts)
+	$(COMPOSE) exec -T ag-api python -m packages.contracts.generate
+
 web: ## Lance le frontend en dev (Next.js sur :3100)
 	cd apps/web && npm install && NEXT_PUBLIC_API_URL=http://localhost:8008 npm run dev -- -p 3100
 
