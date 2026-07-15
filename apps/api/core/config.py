@@ -30,7 +30,9 @@ class Settings(BaseSettings):
     # `X-Forwarded-For` n'est honoré que si ce peer figure ici (reverse proxy de
     # confiance placé devant l'API) — sinon un client peut forger l'en-tête pour
     # obtenir un nouveau compteur à chaque requête et contourner la limite. Vide par
-    # défaut = ne jamais faire confiance à l'en-tête.
+    # défaut = ne jamais faire confiance à l'en-tête. Accepte des IP littérales ou des
+    # noms résolus par DNS (ex. `["caddy"]` en prod co-hébergée, cf. auth._is_trusted_proxy
+    # et docker-compose.prod-fronted.yml). Surchargeable via l'env TRUSTED_PROXIES (JSON).
     trusted_proxies: list[str] = []
 
     # Source des statuts du skill mission-control (fast-path lecture seule).

@@ -52,6 +52,13 @@ Les migrations + garde anti-seed-démo tournent automatiquement dans `infra/api-
 s'exécuter directement si `ENVIRONMENT=prod` (double garde : même un `make seed` lancé par erreur
 sur ce serveur ne recrée pas le compte démo).
 
+`docker-compose.prod-fronted.yml` pose aussi `TRUSTED_PROXIES=["caddy"]` sur `ag-api` : le
+rate-limit anti brute-force de `/auth/login` (`apps/api/routers/auth.py`) n'honore
+`X-Forwarded-For` (pour retrouver la vraie IP client derrière Caddy) que si le peer TCP direct est
+un proxy déclaré ici. `"caddy"` est résolu par DNS à **chaque** requête, jamais figé en IP — le
+Caddy de l'hôte est recréé indépendamment (`--force-recreate`, étape 5 ci-dessous) et pourrait
+changer d'IP sur `caddy_net` sans que ça casse la confiance.
+
 ## 4. Vérifier l'absence de compte démo, puis créer le vrai admin
 
 ```bash
