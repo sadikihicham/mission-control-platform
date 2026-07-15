@@ -24,6 +24,7 @@ from apps.api.agent_control.ingest.schemas import (
     IngestHeartbeatResponse,
     IngestHeartbeatV1,
 )
+from apps.api.agent_control.runs import service as runs_service
 from apps.api.core.config import settings
 from apps.api.integrations.envelopes import EventEnvelopeV1
 from apps.api.integrations.errors import PermissionDenied, ValidationFailed
@@ -50,6 +51,37 @@ def _as_uuid(value: str | None) -> uuid.UUID | None:
         return uuid.UUID(value)
     except (ValueError, TypeError):
         return None
+
+
+def _project_run(db: Session, agent: Agent, ev: EventEnvelopeV1, occurred: datetime) -> None:
+    """Alimente le plan de contrôle des runs depuis un événement accepté (non fatal).
+
+    Dispatch : `run.step.*` → étapes ; `run.<state>` → transition/naissance de run.
+    Aucune exception ne remonte : un échec de projection ne rejette jamais un
+    événement d'audit valide (le journal `agent_events` fait foi indépendamment).
+    """
+    if not ev.event_type.startswith("run."):
+        return
+    if ev.event_type.startswith("run.step."):
+        runs_service.project_run_step_event(
+            db,
+            agent,
+            event_type=ev.event_type,
+            run_id_raw=ev.run_id,
+            payload=ev.payload or {},
+            occurred_at=occurred,
+        )
+    else:
+        runs_service.project_run_event(
+            db,
+            agent,
+            event_type=ev.event_type,
+            run_id_raw=ev.run_id,
+            project_id_raw=ev.project_id,
+            task_id_raw=ev.task_id,
+            payload=ev.payload or {},
+            occurred_at=occurred,
+        )
 
 
 def _topic_for_event(ev: EventEnvelopeV1, agent: Agent) -> str:
@@ -149,6 +181,10 @@ def ingest_events(
                 status="pending",
             )
         )
+        # Projection du plan de contrôle des runs (P4) DANS la même transaction :
+        # les événements run.*/run.step.* alimentent agent_runs/agent_run_steps.
+        # Non fatale : n'altère jamais accepted/rejected (audit ≠ sémantique run).
+        _project_run(db, agent, ev, occurred)
         last_seq = ev.sequence
         accepted += 1
 

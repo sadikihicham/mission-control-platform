@@ -67,3 +67,24 @@ class ValidationFailed(HostIntegrationError):
 
     code = ErrorCode.validation_error
     http_status = 422
+
+
+class ResourceNotFound(HostIntegrationError):
+    """Ressource absente DANS le tenant courant — jamais de fuite d'existence.
+
+    Un accès cross-tenant retourne le même 404 qu'une ressource inexistante
+    (pas de 403 distinct) : l'appelant ne peut pas distinguer « n'existe pas » de
+    « existe dans un autre tenant » (fail-closed, anti-énumération)."""
+
+    code = ErrorCode.not_found
+    http_status = 404
+
+
+class StateConflict(HostIntegrationError):
+    """Transition d'état interdite par la machine figée (§9) — le serveur fait foi.
+
+    Un état terminal est immuable ; une transition non listée est refusée. Un
+    retry crée une nouvelle entité liée, il ne rouvre jamais un état terminal."""
+
+    code = ErrorCode.state_conflict
+    http_status = 409

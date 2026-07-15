@@ -258,3 +258,138 @@ class MCOutboxEvent(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentProjectAssignment(Base):
+    """Affectation agent↔projet (rôle, capacité, statut) — plan de contrôle P4.
+
+    Une seule affectation **active** par couple `(agent_id, project_id)` : garantie
+    par un index unique partiel `WHERE status = 'active'` (migration 0013).
+    L'historique des affectations terminées (`status='ended'`) est conservé —
+    jamais de hard-delete. Tenant `installation_id` résolu serveur (ADR-0003).
+    """
+
+    __tablename__ = "agent_project_assignments"
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="RESTRICT"), index=True
+    )
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    # runner | owner | reviewer | contributor (chaîne libre bornée).
+    role: Mapped[str] = mapped_column(String(40), default="runner", server_default="runner")
+    capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # active | ended (fail-closed hors "active").
+    status: Mapped[str] = mapped_column(String(20), default="active", server_default="active")
+    assigned_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentRun(Base):
+    """Run borné d'un agent (schéma solution §8) — état serveur-autoritatif.
+
+    `id` = clé de run fournie par le producteur (uuid côté agent) : idempotence
+    naturelle et corrélation directe avec `agent_events.run_id` (P3, sans FK).
+    L'état suit la machine `run` figée en P0 (`RUN_TRANSITIONS`, §9). Le serveur
+    fait foi : une transition non autorisée est refusée (`state_conflict`), un
+    état terminal est immuable. Un « retry » crée un NOUVEAU run lié via
+    `retry_of_run_id` — il ne rouvre jamais un run terminal.
+
+    Tenant `installation_id` résolu serveur (ADR-0003), jamais d'un body. FK
+    projet/tâche en SET NULL : un run survit à la suppression de son projet/tâche
+    (trace auditable préservée). `version` = verrou optimiste (transitions).
+    """
+
+    __tablename__ = "agent_runs"
+    __table_args__ = (
+        # Pagination tenant-scoped par récence (created_at DESC, id DESC).
+        Index("ix_agent_runs_installation_created", "installation_id", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("projects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agents.id", ondelete="RESTRICT"), index=True
+    )
+    external_run_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # État courant (machine `run`) : queued|starting|running|waiting_approval|
+    # blocked|succeeded|failed|cancelled|timed_out.
+    state: Mapped[str] = mapped_column(String(30), default="queued", server_default="queued")
+    retry_of_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="SET NULL"), nullable=True
+    )
+    attempt: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    run_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    steps: Mapped[list["AgentRunStep"]] = relationship(
+        back_populates="run",
+        cascade="all, delete-orphan",
+        order_by="AgentRunStep.sequence",
+    )
+
+
+class AgentRunStep(Base):
+    """Étape / tool call d'un run (schéma solution §8) — unique `(run_id, sequence)`.
+
+    Aucun prompt/secret brut : uniquement des résumés (`input_summary` /
+    `output_summary`). `state` simple : started|succeeded|failed (l'état complet
+    du run vit dans `AgentRun`, pas ici).
+    """
+
+    __tablename__ = "agent_run_steps"
+    __table_args__ = (
+        UniqueConstraint("run_id", "sequence", name="uq_agent_run_steps_run_sequence"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("agent_runs.id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer)
+    step_type: Mapped[str] = mapped_column(String(40), default="step", server_default="step")
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    state: Mapped[str] = mapped_column(String(20), default="started", server_default="started")
+    tool_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    input_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    step_metadata: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    run: Mapped["AgentRun"] = relationship(back_populates="steps")
