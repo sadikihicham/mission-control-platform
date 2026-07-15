@@ -56,6 +56,10 @@ class Project(Base):
     )
     progress: Mapped[int] = mapped_column(Integer, default=0)
     repo: Mapped[str | None] = mapped_column(String(255), nullable=True)  # "owner/name" GitHub
+    # Projet de démonstration (vitrine d'orchestration) : persisté en DB mais non
+    # éditable via l'API (le seed est la source, cf. services/projects.py). Ne
+    # doit jamais être créé en production (seed refusé si ENVIRONMENT=prod).
+    is_seed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -93,16 +97,47 @@ class Agent(Base):
 
 
 class Task(Base):
+    """Tâche ou sous-tâche persistée (hiérarchie à un niveau via `parent_id`).
+
+    Étend Contract A de manière additive (migration `0010`) pour rendre la
+    structure projet→tâche→sous-tâche réelle en base, en remplacement des
+    fixtures Python statiques. Les TAUX/ÉTATS affichés restent superposés en
+    live depuis la flotte d'agents (`agent_key`), la structure vient de la DB.
+    """
+
     __tablename__ = "tasks"
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
+    # Sous-tâche : pointe la tâche parente (un seul niveau). NULL = tâche racine.
+    parent_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     agent_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("agents.id"), nullable=True)
+    # Clé naturelle stable par projet (ex. "M0", "M0.1") : sert d'ancre de seed
+    # idempotent et d'identifiant stable côté frontend.
+    code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     title: Mapped[str] = mapped_column(String(255))
+    module: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="todo")
+    progress: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    position: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Agent porteur attendu (clé globale Contract D, pas une FK) : l'état/taux
+    # est superposé en live si un agent de cette clé existe dans la flotte.
+    agent_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     project: Mapped["Project"] = relationship(back_populates="tasks")
+    subtasks: Mapped[list["Task"]] = relationship(
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        order_by="Task.position",
+        single_parent=True,
+    )
+    parent: Mapped["Task | None"] = relationship(back_populates="subtasks", remote_side=[id])
 
 
 class ActivityLog(Base):

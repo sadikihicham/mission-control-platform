@@ -1,8 +1,12 @@
-"""Seed de la structure projet → tâches → sous-tâches → agents.
+"""Données de démonstration : structure projet → tâches → sous-tâches → agents.
 
-Issu de l'orchestration MVP (.mission-control/prompts/*). Les taux et états sont
-ajoutés en live par services/projects.py à partir des statuts mission-control.
-Sera remplacé par la base de données quand l'agent `api` (M3) livrera l'ingest.
+Issu de l'orchestration MVP (.mission-control/prompts/*). Depuis Agent Control P2
+ce module n'est **plus** lu à l'exécution : il sert uniquement de source au seed
+DB idempotent (`apps/api/seed.py`), au même titre que `SEED_USERS`. La structure
+est désormais persistée en base (tables `projects`/`tasks`, migration `0010`) ;
+les taux et états restent superposés en live par `services/projects.py` à partir
+de la flotte d'agents (`agent_key`). Le projet vitrine est marqué `is_seed=True`
+(non éditable via l'API) et n'est semé qu'hors production.
 """
 
 PROJECTS: list[dict] = [
