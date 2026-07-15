@@ -2,16 +2,15 @@
 
 Cockpit de supervision du développement logiciel piloté par IA (agents Claude Code).
 
-> **Statut : Vague 1 (M0 · Socle) en place.** Les modules métier (DB, auth, API,
-> temps réel, dashboard) sont à venir — voir `.mission-control/CONTRACTS.md` et
-> `.mission-control/prompts/`.
+> **Statut : modules métier (DB, auth, API, temps réel, dashboard) en place.** Contrats et
+> historique de build dans `.mission-control/CONTRACTS.md` et `.mission-control/prompts/`.
 
 ## Stack
 
 - **Frontend** : Next.js 14, TypeScript, TailwindCSS, React Query, Zustand
 - **Backend** : FastAPI, SQLAlchemy 2, Pydantic, WebSocket natif
 - **Données** : PostgreSQL 16 · **Temps réel** : Redis pub/sub
-- **CLI agent** : Python + Typer (à venir, module M5)
+- **CLI agent** : Python stdlib (`argparse`), zéro dépendance — module M5
 
 ## Démarrer en local
 
