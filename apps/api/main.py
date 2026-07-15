@@ -8,13 +8,18 @@ Routers :
 - ingest (M3)   : POST /agents/heartbeat → DB + publish Redis.
 - realtime (M4) : WS /ws + abonné Redis + scanner stale (démarrés au lifespan).
 """
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from apps.api.core.config import settings
+from apps.api.integrations.envelopes import ErrorBody, ErrorEnvelope
+from apps.api.integrations.errors import HostIntegrationError
 from apps.api.realtime import ws as ws_module
+from apps.api.routers import agent_control_context as agent_control_context_router
 from apps.api.routers import agents as agents_router
 from apps.api.routers import auth as auth_router
 from apps.api.routers import heartbeat as heartbeat_router
@@ -40,6 +45,23 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(HostIntegrationError)
+async def _host_integration_error_handler(
+    request: Request, exc: HostIntegrationError
+) -> JSONResponse:
+    """Traduit toute erreur d'intégration hôte (identité/tenant/permission) en
+    enveloppe d'erreur V1 `{"error": {code, message, request_id, details}}` avec
+    le statut HTTP associé. S'applique aussi aux erreurs levées dans les
+    dépendances des routes `/agent-control/v1/*` (fail-closed)."""
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    body = ErrorEnvelope(
+        error=ErrorBody(
+            code=exc.code, message=exc.message, request_id=request_id, details=exc.details
+        )
+    )
+    return JSONResponse(status_code=exc.http_status, content=body.model_dump(mode="json"))
+
+
 @app.get("/health", tags=["infra"])
 def health() -> dict[str, str]:
     """Healthcheck — utilisé par docker-compose et le front."""
@@ -53,3 +75,5 @@ app.include_router(projects_router.router)
 app.include_router(auth_router.router)
 app.include_router(heartbeat_router.router)
 app.include_router(ws_module.router)
+# Agent Control V1 (contexte + capacités, lecture seule, tenant résolu serveur).
+app.include_router(agent_control_context_router.router)

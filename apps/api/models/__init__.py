@@ -2,6 +2,12 @@
 
 Import canonique : `from apps.api.models import User, Project, Agent, Task, ActivityLog`
 """
+from apps.api.models.agent_control import (
+    LOCAL_INSTALLATION_ID,
+    LOCAL_INSTALLATION_KEY,
+    MCInstallation,
+    MCUserMapping,
+)
 from apps.api.models.enums import AgentState, ProjectStatus
 from apps.api.models.tables import (
     ActivityLog,
@@ -21,4 +27,8 @@ __all__ = [
     "PasswordResetToken",
     "ProjectStatus",
     "AgentState",
+    "MCInstallation",
+    "MCUserMapping",
+    "LOCAL_INSTALLATION_ID",
+    "LOCAL_INSTALLATION_KEY",
 ]

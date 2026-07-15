@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     # Ingest heartbeat (Contract D)
     mc_ingest_token: str = "dev-ingest-token"
 
+    # Agent Control V1 — sélection de l'adaptateur hôte (ADR-0001, contrat V1 §13).
+    # `local` = mode embarqué/autonome résolu contre le registre DB (mc_installations
+    # / mc_user_mappings). Un futur adaptateur `jwt` d'un hôte réel s'y ajoutera sans
+    # toucher au domaine. Surchargeable via l'env MC_HOST_ADAPTER.
+    mc_host_adapter: str = "local"
+
     # Rate-limit login (interne, hors CONTRACTS.md) : IP du peer TCP direct par défaut.
     # `X-Forwarded-For` n'est honoré que si ce peer figure ici (reverse proxy de
     # confiance placé devant l'API) — sinon un client peut forger l'en-tête pour
