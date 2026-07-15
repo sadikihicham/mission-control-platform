@@ -1,0 +1,314 @@
+{
+  "_about": "Exemples JSON minimaux et valides pour chaque DTO du contrat Agent Control V1. Destinés aux spécialistes SP2..SP7. Validés par apps/api/tests/test_agent_control_v1_contracts.py. L'argent est toujours une chaîne décimale (jamais un float). Les timestamps sont ISO-8601 UTC. Les identifiants sont des UUID sauf agent_key = <installation_key>:<local_key>.",
+
+  "error_envelope": {
+    "error": {
+      "code": "permission_denied",
+      "message": "capacité requise absente : approve",
+      "request_id": "0f9c2b7a-1d3e-4a6b-9c8d-2e1f0a3b4c5d",
+      "details": { "required": "approve" }
+    }
+  },
+
+  "page_info": {
+    "next_cursor": "eyJjcmVhdGVkX2F0IjoiMjAyNi0wNy0xNVQxMDowMDowMFoiLCJpZCI6Ii4uLiJ9",
+    "limit": 50,
+    "has_more": true
+  },
+
+  "paginated_list": {
+    "items": [],
+    "page": { "next_cursor": null, "limit": 50, "has_more": false }
+  },
+
+  "context_response": {
+    "request_id": "0f9c2b7a-1d3e-4a6b-9c8d-2e1f0a3b4c5d",
+    "installation": {
+      "id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+      "installation_key": "local",
+      "external_tenant_id": "local",
+      "status": "active"
+    },
+    "tenant": {
+      "external_tenant_id": "local",
+      "name": "Local",
+      "slug": "local",
+      "status": "active",
+      "feature_flags": {}
+    },
+    "user": {
+      "external_user_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "local_user_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "email": "demo@infinity.ae",
+      "display_name": "Demo",
+      "status": "active"
+    },
+    "capabilities": ["view", "operate", "manage_projects", "approve", "view_costs"],
+    "locale": "fr",
+    "timezone": "Asia/Dubai"
+  },
+
+  "capabilities_response": {
+    "capabilities": ["view", "operate"]
+  },
+
+  "agent_out": {
+    "id": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+    "agent_key": "local:builder-01",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "display_name": "Builder 01",
+    "description": null,
+    "runtime": "claude-code",
+    "provider": "anthropic",
+    "client_version": "1.4.2",
+    "environment": "dev",
+    "capabilities": ["code", "shell"],
+    "status": "active",
+    "state": "working",
+    "last_heartbeat": "2026-07-15T10:00:00Z",
+    "last_sequence": 128,
+    "registered_by": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "registered_at": "2026-07-01T09:00:00Z",
+    "revoked_at": null,
+    "project_ids": ["d4e5f6a7-b8c9-4d1e-8f2a-3b4c5d6e7f80"],
+    "created_at": "2026-07-01T09:00:00Z",
+    "updated_at": "2026-07-15T10:00:00Z"
+  },
+
+  "agent_create": {
+    "local_key": "builder-01",
+    "display_name": "Builder 01",
+    "runtime": "claude-code",
+    "provider": "anthropic",
+    "environment": "dev",
+    "capabilities": ["code", "shell"],
+    "description": null
+  },
+
+  "credential_created": {
+    "id": "e5f6a7b8-c9d1-4e2f-8a3b-4c5d6e7f8091",
+    "agent_id": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+    "key_prefix": "ac_live_ab12",
+    "secret": "ac_live_ab12.Zm9vYmFyLW9wYXF1ZS1zaG93bi1vbmNl",
+    "scopes": ["ingest", "commands"],
+    "expires_at": "2026-10-01T00:00:00Z",
+    "created_by": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "created_at": "2026-07-15T10:00:00Z"
+  },
+
+  "run_out": {
+    "id": "f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "project_id": "d4e5f6a7-b8c9-4d1e-8f2a-3b4c5d6e7f80",
+    "task_id": "a7b8c9d1-e2f3-4a5b-8c6d-7e8f90112233",
+    "agent_id": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+    "external_run_key": "run-2026-07-15-abc",
+    "objective": "Implémenter la pagination par curseur",
+    "state": "running",
+    "started_at": "2026-07-15T10:00:00Z",
+    "finished_at": null,
+    "heartbeat_at": "2026-07-15T10:05:00Z",
+    "result_summary": null,
+    "error_code": null,
+    "error_message": null,
+    "retry_of_run_id": null,
+    "version": 3,
+    "created_at": "2026-07-15T10:00:00Z",
+    "updated_at": "2026-07-15T10:05:00Z"
+  },
+
+  "run_step": {
+    "id": "b8c9d1e2-f3a4-4b5c-8d6e-7f8091122334",
+    "run_id": "f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "sequence": 1,
+    "step_type": "tool_call",
+    "name": "read_file",
+    "state": "succeeded",
+    "started_at": "2026-07-15T10:00:10Z",
+    "finished_at": "2026-07-15T10:00:10Z",
+    "duration_ms": 120,
+    "input_summary": "lecture apps/api/routers/agents.py",
+    "output_summary": "73 lignes",
+    "tool_name": "Read",
+    "metadata": {}
+  },
+
+  "command_out": {
+    "id": "c9d1e2f3-a4b5-4c6d-8e7f-809112233445",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "agent_id": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+    "run_id": "f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "command_type": "pause",
+    "payload": {},
+    "status": "queued",
+    "requested_by": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "approval_request_id": null,
+    "idempotency_key": "cmd-abc-123",
+    "expires_at": "2026-07-15T10:10:00Z",
+    "delivered_at": null,
+    "acknowledged_at": null,
+    "result_at": null,
+    "result": null,
+    "created_at": "2026-07-15T10:00:00Z"
+  },
+
+  "approval_out": {
+    "id": "d1e2f3a4-b5c6-4d7e-8f80-911223344556",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "project_id": "d4e5f6a7-b8c9-4d1e-8f2a-3b4c5d6e7f80",
+    "task_id": null,
+    "run_id": "f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "agent_id": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+    "action_type": "git.push",
+    "risk_level": "high",
+    "title": "Pousser sur la branche main",
+    "context": { "branch": "main", "files_changed": 12 },
+    "requested_by_agent": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+    "status": "pending",
+    "assigned_to": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "expires_at": "2026-07-15T11:00:00Z",
+    "decided_at": null,
+    "decision_by": null,
+    "decision_comment": null,
+    "version": 1,
+    "created_at": "2026-07-15T10:00:00Z"
+  },
+
+  "policy_out": {
+    "id": "e2f3a4b5-c6d7-4e8f-8091-122334455667",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "scope": "project",
+    "scope_id": "d4e5f6a7-b8c9-4d1e-8f2a-3b4c5d6e7f80",
+    "action_type": "git.push",
+    "tool_name": null,
+    "effect": "require_approval",
+    "conditions": { "branch": "main" },
+    "priority": 100,
+    "status": "active",
+    "version": 1,
+    "created_at": "2026-07-15T09:00:00Z",
+    "updated_at": "2026-07-15T09:00:00Z"
+  },
+
+  "alert_out": {
+    "id": "f3a4b5c6-d7e8-4f90-8112-233445566778",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "alert_type": "budget.threshold",
+    "severity": "warning",
+    "status": "open",
+    "target_type": "budget",
+    "target_id": "a4b5c6d7-e8f9-4012-8233-445566778899",
+    "dedup_key": "budget:a4b5c6d7:80",
+    "opened_at": "2026-07-15T10:00:00Z",
+    "acknowledged_at": null,
+    "resolved_at": null,
+    "actor": null,
+    "created_at": "2026-07-15T10:00:00Z"
+  },
+
+  "budget_out": {
+    "id": "a4b5c6d7-e8f9-4012-8233-445566778899",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "scope": "project",
+    "scope_id": "d4e5f6a7-b8c9-4d1e-8f2a-3b4c5d6e7f80",
+    "period": "monthly",
+    "amount": "1000.00",
+    "currency": "AED",
+    "thresholds": [50, 80, 100],
+    "projected_consumption": "420.00",
+    "on_exceed": "require_approval",
+    "created_at": "2026-07-01T00:00:00Z",
+    "updated_at": "2026-07-15T10:00:00Z"
+  },
+
+  "usage_record": {
+    "id": "b5c6d7e8-f901-4223-8445-566778899001",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "agent_id": "c3d4e5f6-a7b8-4c9d-8e1f-2a3b4c5d6e7f",
+    "project_id": "d4e5f6a7-b8c9-4d1e-8f2a-3b4c5d6e7f80",
+    "run_id": "f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "provider": "anthropic",
+    "model": "claude-opus",
+    "input_tokens": 1200,
+    "output_tokens": 800,
+    "cache_tokens": 0,
+    "tool_calls": 3,
+    "duration_ms": 45000,
+    "quantity": 1,
+    "currency": "AED",
+    "cost": "0.42",
+    "occurred_at": "2026-07-15T10:05:00Z",
+    "source_event_id": "d7e8f901-2233-4445-8667-788990011223",
+    "pricing_version": "2026-07"
+  },
+
+  "audit_entry": {
+    "id": "c6d7e8f9-0122-4334-8556-677889900112",
+    "installation_id": "b2f4c6a8-0e1d-4c3b-8a7f-6e5d4c3b2a19",
+    "actor_type": "user",
+    "actor_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "action": "approval.approved",
+    "target_type": "approval",
+    "target_id": "d1e2f3a4-b5c6-4d7e-8f80-911223344556",
+    "before": null,
+    "after": { "status": "approved" },
+    "ip_hash": "sha256:9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "request_id": "0f9c2b7a-1d3e-4a6b-9c8d-2e1f0a3b4c5d",
+    "occurred_at": "2026-07-15T10:06:00Z"
+  },
+
+  "event_envelope": {
+    "event_id": "d8e9f012-2334-4455-8667-889900112233",
+    "agent_key": "local:builder-01",
+    "sequence": 42,
+    "event_type": "run.step.completed",
+    "occurred_at": "2026-07-15T10:00:10Z",
+    "payload": { "step_sequence": 1, "tool_name": "Read", "duration_ms": 120 },
+    "run_id": "f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "project_id": "d4e5f6a7-b8c9-4d1e-8f2a-3b4c5d6e7f80",
+    "task_id": null,
+    "trace_id": "trace-abc",
+    "client_version": "1.4.2"
+  },
+
+  "ingest_events_request": {
+    "events": [
+      {
+        "event_id": "d8e9f012-2334-4455-8667-889900112233",
+        "agent_key": "local:builder-01",
+        "sequence": 42,
+        "event_type": "run.step.completed",
+        "occurred_at": "2026-07-15T10:00:10Z",
+        "payload": { "step_sequence": 1 }
+      }
+    ]
+  },
+
+  "ingest_events_response": {
+    "accepted": 1,
+    "duplicates": 0,
+    "rejected": 0,
+    "last_sequence": 42
+  },
+
+  "ingest_heartbeat_v1": {
+    "agent_key": "local:builder-01",
+    "state": "working",
+    "run_id": "f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "task": "Implémenter la pagination",
+    "progress": 42,
+    "sequence": 128,
+    "occurred_at": "2026-07-15T10:05:00Z",
+    "metrics": {}
+  },
+
+  "ws_message": {
+    "id": "d8e9f012-2334-4455-8667-889900112233",
+    "type": "run.step.completed",
+    "tenant_id": "local",
+    "topic": "run:f6a7b8c9-d1e2-4f3a-8b4c-5d6e7f809112",
+    "sequence": 42,
+    "data": { "step_sequence": 1, "tool_name": "Read" },
+    "occurred_at": "2026-07-15T10:00:10Z"
+  }
+}
