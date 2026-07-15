@@ -77,11 +77,21 @@ def test_revoke_agent_token(client, admin_token, viewer_token):
         json={"agent": "revoke-agent", "state": "idle"},
     )
 
+    # Enrôlé : visible côté admin (rubrique Administration → identifiants agents).
+    agents = client.get("/agents", headers=auth(admin_token)).json()
+    enrolled = next(a for a in agents if a["agent"] == "revoke-agent")
+    assert enrolled["token_issued_at"]
+
     forbidden = client.post("/agents/revoke-agent/revoke-token", headers=auth(viewer_token))
     assert forbidden.status_code == 403
 
     rv = client.post("/agents/revoke-agent/revoke-token", headers=auth(admin_token))
     assert rv.status_code == 204
+
+    # Révoqué : ne réapparaît plus comme enrôlé tant qu'il ne s'est pas ré-enrôlé.
+    agents = client.get("/agents", headers=auth(admin_token)).json()
+    revoked = next(a for a in agents if a["agent"] == "revoke-agent")
+    assert revoked["token_issued_at"] is None
 
     # Révoqué : doit se ré-enrôler avec le secret partagé + X-MC-Enroll.
     r2 = client.post(

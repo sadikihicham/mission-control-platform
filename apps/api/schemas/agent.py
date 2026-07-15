@@ -20,6 +20,9 @@ class AgentOut(BaseModel):
     tasks_total: int | None = None
     updated_at: str | None = None
     age_seconds: float | None = None
+    # Identité par agent (Contract D) : date d'enrôlement si le secret partagé a
+    # été remplacé par un token propre à l'agent, sinon None.
+    token_issued_at: str | None = None
 
 
 class ActivityOut(BaseModel):

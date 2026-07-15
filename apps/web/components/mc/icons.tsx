@@ -51,4 +51,5 @@ export const Icon = {
   sliders: _i(<><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></>),
   menu: _i(<path d="M3 6h18M3 12h18M3 18h18" />),
   bell: _i(<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" />),
+  shield: _i(<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3Z" />),
 } as const;

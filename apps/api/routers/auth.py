@@ -71,6 +71,7 @@ class MeOut(BaseModel):
     role: str
     full_name: str | None = None
     civility: str | None = None
+    is_active: bool = True
 
 
 @router.post("/auth/login", response_model=TokenOut)
@@ -95,7 +96,8 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)) -> Tok
                 status.HTTP_429_TOO_MANY_REQUESTS, "trop de tentatives, réessayez plus tard"
             )
     user = db.scalar(select(User).where(User.email == body.email))
-    if not user or not verify_password(body.password, user.hashed_password):
+    # Même message que "mot de passe faux" — ne pas révéler qu'un compte désactivé existe.
+    if not user or not verify_password(body.password, user.hashed_password) or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "identifiants invalides")
     return TokenOut(access_token=create_access_token(user.id, user.role))
 
@@ -188,7 +190,9 @@ def get_current_user(
     except (JWTError, KeyError, ValueError) as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token invalide") from exc
     user = db.get(User, user_id)
-    if not user:
+    # Un JWT existant reste valide jusqu'à expiration ; on coupe quand même l'accès
+    # dès la requête suivante si le compte a été désactivé entre-temps.
+    if not user or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "utilisateur inconnu")
     return user
 
@@ -219,3 +223,71 @@ def list_users(
 ) -> list[User]:
     """Liste des utilisateurs — réservé au rôle admin (démontre require_role)."""
     return list(db.scalars(select(User)).all())
+
+
+class UserCreateIn(BaseModel):
+    email: str
+    password: str = Field(min_length=6, max_length=128)
+    role: Role = Role.viewer
+    full_name: str | None = None
+    civility: str | None = None
+
+
+class UserUpdateIn(BaseModel):
+    role: Role | None = None
+    full_name: str | None = None
+    civility: str | None = None
+    is_active: bool | None = None
+
+
+@router.post("/auth/users", response_model=MeOut, status_code=status.HTTP_201_CREATED)
+def create_user(
+    body: UserCreateIn,
+    _: User = Depends(require_role(Role.admin)),
+    db: Session = Depends(get_db),
+) -> User:
+    if db.scalar(select(User).where(User.email == body.email)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "email déjà utilisé")
+    user = User(
+        email=body.email,
+        hashed_password=hash_password(body.password),
+        role=body.role.value,
+        full_name=body.full_name,
+        civility=body.civility,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.patch("/auth/users/{user_id}", response_model=MeOut)
+def update_user(
+    user_id: uuid.UUID,
+    body: UserUpdateIn,
+    admin: User = Depends(require_role(Role.admin)),
+    db: Session = Depends(get_db),
+) -> User:
+    target = db.get(User, user_id)
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "utilisateur introuvable")
+    # Anti-auto-lockout : un admin ne peut pas se désactiver ni se rétrograder
+    # lui-même — avec un seul admin réel aujourd'hui, l'erreur serait irréversible
+    # sans accès DB direct.
+    demoting_self = target.id == admin.id and body.role is not None and body.role != Role.admin
+    deactivating_self = target.id == admin.id and body.is_active is False
+    if demoting_self or deactivating_self:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "impossible de se rétrograder ou se désactiver soi-même"
+        )
+    if body.role is not None:
+        target.role = body.role.value
+    if body.full_name is not None:
+        target.full_name = body.full_name
+    if body.civility is not None:
+        target.civility = body.civility
+    if body.is_active is not None:
+        target.is_active = body.is_active
+    db.commit()
+    db.refresh(target)
+    return target

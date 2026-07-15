@@ -19,6 +19,9 @@ export type Agent = {
   tasks_total: number | null;
   updated_at: string | null;
   age_seconds: number | null;
+  // Identité par agent (Contract D) : date d'enrôlement, ou null s'il tourne
+  // encore avec le secret partagé MC_INGEST_TOKEN.
+  token_issued_at: string | null;
 };
 
 export type SubTask = {
@@ -193,11 +196,20 @@ export const getAgentActivity = (key: string) =>
 
 /* ---------- Écriture (CRUD projets, rôle pm+) ---------- */
 
-export type Me = { id: string; email: string; role: string; full_name: string | null; civility: string | null };
+export type Me = {
+  id: string;
+  email: string;
+  role: string;
+  full_name: string | null;
+  civility: string | null;
+  is_active: boolean;
+};
 export const getMe = () => get<Me>("/auth/me");
 
 export const WRITE_ROLES = ["pm", "cto", "admin"];
 export const canWrite = (role: string | null) => !!role && WRITE_ROLES.includes(role);
+
+export const ROLES = ["viewer", "developer", "pm", "cto", "admin"] as const;
 
 export const PROJECT_STATUSES = ["proposed", "validated", "in_dev", "done", "archived"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
@@ -228,3 +240,13 @@ export const createProject = (body: { name: string; description?: string; status
 export const updateProject = (id: string, body: { status?: string; name?: string; description?: string; progress?: number; repo?: string | null }) =>
   send<ProjectDetail>("PATCH", `/projects/${id}`, body);
 export const deleteProject = (id: string) => send<null>("DELETE", `/projects/${id}`);
+
+/* ---------- Administration (rôle admin) ---------- */
+
+export const getUsers = () => get<Me[]>("/auth/users");
+export const createUser = (body: { email: string; password: string; role?: string; full_name?: string; civility?: string }) =>
+  send<Me>("POST", "/auth/users", body);
+export const updateUser = (id: string, body: { role?: string; full_name?: string; civility?: string; is_active?: boolean }) =>
+  send<Me>("PATCH", `/auth/users/${id}`, body);
+export const revokeAgentToken = (agentKey: string) =>
+  send<null>("POST", `/agents/${encodeURIComponent(agentKey)}/revoke-token`);
