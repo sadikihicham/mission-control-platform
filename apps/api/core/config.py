@@ -32,6 +32,17 @@ class Settings(BaseSettings):
     # toucher au domaine. Surchargeable via l'env MC_HOST_ADAPTER.
     mc_host_adapter: str = "local"
 
+    # Ingest V1 (contrat V1 §8) : taille maximale d'un batch d'événements accepté
+    # par POST /agent-control/v1/ingest/events. Au-delà → validation_error (422).
+    mc_event_batch_max: int = 200
+
+    # Compatibilité Contract D (ADR-0002/0004) : autorise le secret global partagé
+    # `MC_INGEST_TOKEN` pour l'enrôlement/heartbeat V0. True = compat maintenue (les
+    # producteurs V0 fonctionnent inchangés). En production embarquée, désactiver
+    # (fail-closed) pour n'accepter que les credentials individuels V1. N'affecte
+    # PAS l'ingest V1, qui exige toujours un credential agent hashé.
+    mc_global_ingest_enabled: bool = True
+
     # Rate-limit login (interne, hors CONTRACTS.md) : IP du peer TCP direct par défaut.
     # `X-Forwarded-For` n'est honoré que si ce peer figure ici (reverse proxy de
     # confiance placé devant l'API) — sinon un client peut forger l'en-tête pour

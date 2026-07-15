@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from apps.api.agent_control.ingest import routes as agent_control_ingest_router
 from apps.api.core.config import settings
 from apps.api.integrations.envelopes import ErrorBody, ErrorEnvelope
 from apps.api.integrations.errors import HostIntegrationError
@@ -77,3 +78,6 @@ app.include_router(heartbeat_router.router)
 app.include_router(ws_module.router)
 # Agent Control V1 (contexte + capacités, lecture seule, tenant résolu serveur).
 app.include_router(agent_control_context_router.router)
+# Agent Control V1 — ingest (événements + heartbeat), authentifié par credential
+# agent (hors JWT utilisateur). Distinct du heartbeat V0 `/agents/heartbeat`.
+app.include_router(agent_control_ingest_router.router)
