@@ -16,6 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from apps.api.agent_control.ingest import routes as agent_control_ingest_router
+from apps.api.agent_control.runs import routes as agent_control_runs_router
 from apps.api.core.config import settings
 from apps.api.integrations.envelopes import ErrorBody, ErrorEnvelope
 from apps.api.integrations.errors import HostIntegrationError
@@ -81,3 +82,7 @@ app.include_router(agent_control_context_router.router)
 # Agent Control V1 — ingest (événements + heartbeat), authentifié par credential
 # agent (hors JWT utilisateur). Distinct du heartbeat V0 `/agents/heartbeat`.
 app.include_router(agent_control_ingest_router.router)
+# Agent Control V1 — plan de contrôle des runs (lecture : liste, détail, timeline).
+# Bornage tenant + capacité `view` (matrice figée §8). Les runs se créent par
+# projection des événements d'ingest, pas par une route utilisateur (P4).
+app.include_router(agent_control_runs_router.router)
