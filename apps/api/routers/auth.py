@@ -1,4 +1,5 @@
 """Router auth + dépendance get_current_user (Contract B). Owner : `auth` (M2)."""
+import socket
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -34,6 +35,25 @@ _LOGIN_RATE_LIMIT = 10
 _LOGIN_RATE_WINDOW_SECONDS = 600
 
 
+def _is_trusted_proxy(peer: str) -> bool:
+    """`settings.trusted_proxies` accepte des IP littérales ou des noms résolvables par
+    DNS (ex. `caddy`, le service Docker Compose de l'hôte SGI qui reverse-proxy ce
+    service en prod co-hébergée — cf. docs/DEPLOY_FRONTED.md). Résolu à CHAQUE appel,
+    jamais mis en cache : ce Caddy est recréé indépendamment de ag-api
+    (`--force-recreate`, même doc §5) lors des changements de Caddyfile, ce qui peut lui
+    réattribuer une IP différente sur le réseau externe partagé `caddy_net` — une IP
+    figée casserait silencieusement la confiance au prochain redéploiement de Caddy."""
+    for entry in settings.trusted_proxies:
+        if entry == peer:
+            return True
+        try:
+            if socket.gethostbyname(entry) == peer:
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _client_ip(request: Request) -> str:
     """IP à utiliser pour le rate-limit. Le peer TCP direct par défaut ;
     `X-Forwarded-For` n'est honoré que si ce peer est un proxy de confiance
@@ -43,7 +63,7 @@ def _client_ip(request: Request) -> str:
     notre proxy de confiance, tout ce qui précède peut avoir été forgé plus
     loin en amont."""
     peer = request.client.host if request.client else None
-    if peer and peer in settings.trusted_proxies:
+    if peer and _is_trusted_proxy(peer):
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
             hops = [h.strip() for h in forwarded.split(",") if h.strip()]

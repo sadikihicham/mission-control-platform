@@ -20,6 +20,12 @@ networks:
 
 services:
   ag-api:
+    environment:
+      # Nom du service Compose du Caddy hôte (SGI, §5 docs/DEPLOY_FRONTED.md) sur
+      # `caddy_net` — résolu par DNS à chaque requête (apps/api/routers/auth.py,
+      # _is_trusted_proxy), pas une IP figée : `--force-recreate caddy` peut lui
+      # réattribuer une IP différente sur ce réseau externe partagé.
+      TRUSTED_PROXIES: '["caddy"]'
     networks:
       default: {}
       caddy_net: {}

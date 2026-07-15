@@ -1,4 +1,5 @@
 """Rate-limit fixe (core/ratelimit.py) + garde brute-force sur /auth/login en prod."""
+import socket
 import uuid
 
 import redis
@@ -115,6 +116,62 @@ def test_xff_honored_behind_trusted_proxy_but_email_key_still_limits(client, mon
         get_sync_redis().delete(email_key)
         for ip in ips:
             get_sync_redis().delete(f"ratelimit:login:ip:{ip}")
+
+
+def test_trusted_proxy_resolved_by_hostname(client, monkeypatch):
+    """`trusted_proxies` accepte un nom résolu par DNS (ex. `caddy` en prod
+    co-hébergée, cf. docs/DEPLOY_FRONTED.md), pas seulement une IP littérale —
+    résolu à chaque requête pour survivre à un `--force-recreate` de Caddy."""
+    from apps.api.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "trusted_proxies", ["caddy"])
+
+    def fake_gethostbyname(name):
+        if name == "caddy":
+            return "testclient"
+        raise OSError(f"lookup DNS inattendu pour {name!r}")
+
+    monkeypatch.setattr(socket, "gethostbyname", fake_gethostbyname)
+
+    email = f"caddy-dns-{uuid.uuid4().hex}@mc.local"
+    xff_ip_key = "ratelimit:login:ip:203.0.113.7"
+    r = get_sync_redis()
+    try:
+        client.post(
+            "/auth/login",
+            json={"email": email, "password": "WRONG"},
+            headers={"X-Forwarded-For": "203.0.113.7"},
+        )
+        # La clé est bâtie sur l'IP du header, pas sur "testclient" (le peer TCP) —
+        # preuve que "caddy" a bien été résolu et considéré de confiance.
+        assert r.get(xff_ip_key) is not None
+    finally:
+        r.delete(xff_ip_key)
+        r.delete(f"ratelimit:login:email:{email}")
+
+
+def test_unresolvable_trusted_proxy_hostname_does_not_break_login(client, monkeypatch):
+    """Une entrée `trusted_proxies` non résolvable (Caddy pas encore démarré, DNS en
+    hoquet) ne doit jamais faire planter /auth/login — juste ne pas être honorée."""
+    from apps.api.core.config import settings
+
+    monkeypatch.setattr(settings, "environment", "production")
+    monkeypatch.setattr(settings, "trusted_proxies", ["caddy"])
+    monkeypatch.setattr(
+        socket, "gethostbyname", lambda name: (_ for _ in ()).throw(OSError("no such host"))
+    )
+    r = get_sync_redis()
+    try:
+        resp = client.post(
+            "/auth/login",
+            json={"email": "admin@mc.local", "password": "WRONG"},
+            headers={"X-Forwarded-For": "203.0.113.7"},
+        )
+        assert resp.status_code == 401
+    finally:
+        r.delete("ratelimit:login:ip:testclient")
+        r.delete("ratelimit:login:email:admin@mc.local")
 
 
 def test_login_not_rate_limited_outside_prod(client):
