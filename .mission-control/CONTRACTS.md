@@ -50,6 +50,7 @@ Tables core MVP (SQLAlchemy + Alembic) :
 - `POST /auth/reset-password` — body `{ "token": str, "new_password": str }` → `200 { "message": str }` (`400` si jeton invalide/expiré/déjà utilisé)
 - `GET /auth/me` → `{ id, email, role, full_name, civility }` — utilisateur courant
 - `GET /auth/users` → `[{ id, email, role, full_name, civility }]` — **admin uniquement**
+- `POST /auth/change-password` (ajout post-hoc) — body `{ "current_password": str, "new_password": str }` → `200 { "message": str }` (`400` si `current_password` incorrect, `401` sans token). Self-service : tout utilisateur connecté change **son propre** mot de passe, aucun rôle minimum requis au-delà d'être authentifié.
 - JWT Bearer, claims `{ "sub": <user_id>, "role": str, "exp": int }`, algo HS256, secret depuis env `JWT_SECRET`.
 - Dépendance FastAPI réutilisable : `from apps.api.routers.auth import get_current_user, require_role` → `require_role(minimum)` autorise tout rôle ≥ `minimum`.
 - RBAC (`viewer < developer < pm < cto < admin`, `apps/api/core/roles.py`) est **déjà implémenté**, pas reporté à plus tard. Le multi-tenant est abandonné pour ce MVP (§7 ci-dessus, `company_id` retirée).

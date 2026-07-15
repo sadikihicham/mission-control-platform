@@ -87,3 +87,52 @@ def test_new_forgot_invalidates_previous_token(client, make_user):
     # Émettre un nouveau jeton invalide le précédent.
     assert client.post("/auth/reset-password", json={"token": first, "new_password": "shouldfail1"}).status_code == 400
     assert client.post("/auth/reset-password", json={"token": second, "new_password": "shouldwork1"}).status_code == 200
+
+
+# ---- Changement de mot de passe (self-service, utilisateur connecté) ----
+# NB : comme pour reset-password, on utilise make_user() pour ne pas muter les
+# comptes seedés partagés entre tests.
+
+def test_change_password_success_then_login_with_new_password(client, make_user):
+    email = make_user(password="initial1")
+    token = client.post("/auth/login", json={"email": email, "password": "initial1"}).json()["access_token"]
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "initial1", "new_password": "brandnew1"},
+        headers=auth(token),
+    )
+    assert r.status_code == 200
+    assert client.post("/auth/login", json={"email": email, "password": "initial1"}).status_code == 401
+    assert client.post("/auth/login", json={"email": email, "password": "brandnew1"}).status_code == 200
+
+
+def test_change_password_wrong_current_rejected(client, make_user):
+    email = make_user(password="initial1")
+    token = client.post("/auth/login", json={"email": email, "password": "initial1"}).json()["access_token"]
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "WRONG", "new_password": "brandnew1"},
+        headers=auth(token),
+    )
+    assert r.status_code == 400
+    # Le mot de passe original reste utilisable.
+    assert client.post("/auth/login", json={"email": email, "password": "initial1"}).status_code == 200
+
+
+def test_change_password_requires_auth(client):
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "whatever1", "new_password": "brandnew1"},
+    )
+    assert r.status_code == 401
+
+
+def test_change_password_too_short_rejected(client, make_user):
+    email = make_user(password="initial1")
+    token = client.post("/auth/login", json={"email": email, "password": "initial1"}).json()["access_token"]
+    r = client.post(
+        "/auth/change-password",
+        json={"current_password": "initial1", "new_password": "abc"},
+        headers=auth(token),
+    )
+    assert r.status_code == 422

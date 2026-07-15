@@ -46,6 +46,7 @@ export function Sidebar({
   canNew,
   onNew,
   onLogout,
+  onChangePassword,
   me,
   counts,
 }: {
@@ -54,6 +55,7 @@ export function Sidebar({
   canNew: boolean;
   onNew: () => void;
   onLogout: () => void;
+  onChangePassword: () => void;
   me: Me | null;
   counts: FleetCounts;
 }) {
@@ -107,6 +109,9 @@ export function Sidebar({
           </>
         )}
       </div>
+      <button className="nav-item" onClick={onChangePassword} title={t("au_change_title")}>
+        {Icon.shield({})}<span>{t("au_change_title")}</span>
+      </button>
       <button className="nav-item logout-item" onClick={onLogout} title={t("logout")}>
         {Icon.logout({})}<span>{t("logout")}</span>
       </button>
@@ -187,6 +192,7 @@ export function Shell({
   canNew,
   onNew,
   onLogout,
+  onChangePassword,
   onCommand,
   onBell,
   badge,
@@ -204,6 +210,7 @@ export function Shell({
   canNew: boolean;
   onNew: () => void;
   onLogout: () => void;
+  onChangePassword: () => void;
   onCommand: () => void;
   onBell: () => void;
   badge: number;
@@ -212,7 +219,7 @@ export function Shell({
 }) {
   return (
     <div className={"app" + (collapsed ? " nav-collapsed" : "")}>
-      <Sidebar view={view} onNav={onNav} canNew={canNew} onNew={onNew} onLogout={onLogout} me={me} counts={counts} />
+      <Sidebar view={view} onNav={onNav} canNew={canNew} onNew={onNew} onLogout={onLogout} onChangePassword={onChangePassword} me={me} counts={counts} />
       <main className="main">
         <Topbar
           title={title} theme={theme} onToggleTheme={onToggleTheme} onCommand={onCommand}

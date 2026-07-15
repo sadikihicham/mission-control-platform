@@ -198,6 +198,11 @@ def reset_password(body: ResetPasswordIn, db: Session = Depends(get_db)) -> Mess
     return MessageOut(message="Mot de passe réinitialisé. Vous pouvez vous connecter.")
 
 
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=128)
+
+
 def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db: Session = Depends(get_db),
@@ -234,6 +239,20 @@ def require_role(minimum: Role):
 @router.get("/auth/me", response_model=MeOut)
 def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.post("/auth/change-password", response_model=MessageOut)
+def change_password(
+    body: ChangePasswordIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageOut:
+    """Self-service : l'utilisateur connecté change SON PROPRE mot de passe."""
+    if not verify_password(body.current_password, user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "mot de passe actuel incorrect")
+    user.hashed_password = hash_password(body.new_password)
+    db.commit()
+    return MessageOut(message="Mot de passe modifié.")
 
 
 @router.get("/auth/users", response_model=list[MeOut])

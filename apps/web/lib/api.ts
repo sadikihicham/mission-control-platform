@@ -142,6 +142,38 @@ export async function resetPassword(token: string, newPassword: string): Promise
   return res.json();
 }
 
+/** Changement de mot de passe pour l'utilisateur déjà connecté (authentifié, Bearer JWT). */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+  const token = getToken();
+  const res = await fetch(`${API_URL}/auth/change-password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (res.status === 401) {
+    // Token absent/expiré/invalidé → retour au login (même traitement que get()/send()).
+    clearToken();
+    if (typeof window !== "undefined") window.location.reload();
+    throw new Error("session expirée");
+  }
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    const msg = typeof detail?.detail === "string" ? detail.detail : null;
+    throw new Error(
+      msg ??
+        (res.status === 422
+          ? "Le nouveau mot de passe doit contenir au moins 6 caractères."
+          : res.status === 400
+          ? "Mot de passe actuel incorrect."
+          : `Erreur ${res.status}`)
+    );
+  }
+  return res.json();
+}
+
 export function wsUrl(token: string): string {
   return `${API_URL.replace(/^http/, "ws")}/ws?token=${encodeURIComponent(token)}`;
 }

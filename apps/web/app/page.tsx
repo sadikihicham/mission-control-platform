@@ -36,6 +36,7 @@ import { Sentinel } from "@/components/mc/Sentinel";
 import { Admin } from "@/components/mc/Admin";
 import { CommandPalette } from "@/components/mc/Command";
 import { TweaksPanel, applyTweaks, TWEAK_DEFAULTS, type Tweaks } from "@/components/mc/Tweaks";
+import { ChangePasswordModal } from "@/components/mc/ChangePasswordModal";
 import { useI18n } from "@/lib/i18n";
 
 // Vues qui rendent la flotte réelle (Overview) avec un filtre de statut.
@@ -89,6 +90,7 @@ export default function Home() {
   const [me, setMe] = useState<Me | null>(null);
   const [tweaks, setTweaks] = useState<Tweaks>(TWEAK_DEFAULTS);
   const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
   const [view, setView] = useState<string>("home");
   const [collapsed, setCollapsed] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -310,6 +312,7 @@ export default function Home() {
         canNew={writer}
         onNew={() => { setView("projects"); setSelected(null); setShowNew(true); }}
         onLogout={logout}
+        onChangePassword={() => setPwOpen(true)}
         onCommand={() => setCmdOpen(true)}
         onBell={() => { setView("review"); setSelected(null); setSelectedAgent(null); }}
         badge={reviewBadge}
@@ -334,6 +337,7 @@ export default function Home() {
         }}
       />
       <TweaksPanel open={tweaksOpen} onClose={() => setTweaksOpen(false)} t={tweaks} set={setTw} />
+      <ChangePasswordModal open={pwOpen} onClose={() => setPwOpen(false)} />
       <Toasts toasts={toasts} />
     </>
   );
