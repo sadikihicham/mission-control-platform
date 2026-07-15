@@ -30,10 +30,30 @@ def _schema():
     engine = get_engine()
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
+    _seed_role_accounts()
     from apps.api.seed import run as seed_run
     seed_run()
     yield
     Base.metadata.drop_all(engine)
+
+
+def _seed_role_accounts() -> None:
+    """Comptes de rôle utilisés par admin_token/pm_token/viewer_token — propres
+    aux tests, indépendants du seed dev (`apps.api.seed`) qui ne crée plus aucun
+    compte de démo."""
+    from apps.api.core.security import hash_password
+    from apps.api.models import User
+
+    Session = get_sessionmaker()
+    with Session() as db:
+        for email, pwd, role in [
+            ("admin@mc.local", "admin", "admin"),
+            ("pm@mc.local", "pm", "pm"),
+            ("viewer@mc.local", "viewer", "viewer"),
+        ]:
+            if not db.query(User).filter_by(email=email).first():
+                db.add(User(email=email, hashed_password=hash_password(pwd), role=role))
+        db.commit()
 
 
 @pytest.fixture

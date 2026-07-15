@@ -1,8 +1,10 @@
-"""Seed idempotent : users de démo + projets (demo-crm + vitrine persistée).
+"""Seed idempotent : projets (demo-crm + vitrine persistée) + socle tenancy Agent Control.
 
 Lancement : `python -m apps.api.seed` (DATABASE_URL doit pointer une base migrée).
 La vitrine d'orchestration (projet → tâches → sous-tâches) est désormais
 persistée en base (cf. `_seed_showcase`) au lieu d'une fixture lue à l'exécution.
+Ne crée plus aucun compte utilisateur de démo (retiré : ces comptes réapparaissaient
+à chaque reseed alors qu'ils avaient été explicitement supprimés).
 """
 import os
 import sys
@@ -11,7 +13,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.core.db import get_sessionmaker
-from apps.api.core.security import hash_password
 from apps.api.models import (
     LOCAL_INSTALLATION_ID,
     LOCAL_INSTALLATION_KEY,
@@ -23,17 +24,6 @@ from apps.api.models import (
     User,
 )
 from apps.api.services.project_seed import PROJECTS
-
-# Comptes de démo. Le 1er est le login par défaut de la plateforme.
-# (email, mot de passe, rôle, nom affiché, civilité mr|mrs|miss)
-SEED_USERS = [
-    ("demo@infinity.ae", "password", "admin", "Sultan", "mr"),
-    ("admin@mc.local", "admin", "admin", "Admin", "mr"),
-    ("cto@mc.local", "cto", "cto", "Mansouri", "mrs"),
-    ("pm@mc.local", "pm", "pm", "Karimi", "miss"),
-    ("dev@mc.local", "developer", "developer", "Haddad", "mr"),
-    ("viewer@mc.local", "viewer", "viewer", "Nadia", "miss"),
-]
 
 
 def _seed_showcase(db: Session) -> None:
@@ -110,18 +100,6 @@ def run() -> None:
         raise SystemExit(1)
     Session = get_sessionmaker()
     with Session() as db:
-        for email, pwd, role, full_name, civility in SEED_USERS:
-            existing = db.scalar(select(User).where(User.email == email))
-            if not existing:
-                db.add(User(
-                    email=email, hashed_password=hash_password(pwd), role=role,
-                    full_name=full_name, civility=civility,
-                ))
-                print(f"+ user {email} (rôle {role}, {civility} {full_name}, mdp: {pwd})")
-            elif existing.full_name is None and existing.civility is None:
-                # Backfill profil pour les comptes seedés avant la migration 0004.
-                existing.full_name, existing.civility = full_name, civility
-                print(f"~ user {email} : profil ajouté ({civility} {full_name})")
         if not db.scalar(select(Project).where(Project.slug == "demo-crm")):
             db.add(
                 Project(
