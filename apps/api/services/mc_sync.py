@@ -14,6 +14,13 @@ from sqlalchemy.orm import Session
 from apps.api.core.config import settings
 from apps.api.models import ActivityLog, Agent, AgentState
 
+# Sentinelle de provenance stockée dans `meta.source` (hors Contract A, jamais exposée par
+# AgentOut) : distingue les agents synchronisés depuis les fichiers `mc` des agents DB-natifs
+# créés par POST /agents/heartbeat (jamais taggués "mc-file" — heartbeat.py retire explicitement
+# toute valeur "source" fournie par le client). Point de vérité unique plutôt qu'un literal
+# dupliqué à l'écriture (sync_once) et à la lecture (purge, ci-dessous).
+AGENT_SOURCE_MC_FILE = "mc-file"
+
 
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
@@ -62,7 +69,7 @@ def sync_once(db: Session) -> int:
                 "label": raw.get("label"),
                 "tasks_done": raw.get("tasks_done"),
                 "tasks_total": raw.get("tasks_total"),
-                "source": "mc-file",
+                "source": AGENT_SOURCE_MC_FILE,
             }.items()
             if v is not None
         }
@@ -76,7 +83,7 @@ def sync_once(db: Session) -> int:
     # DB-natifs créés par heartbeat, dont meta.source != "mc-file").
     db.flush()
     for agent in db.scalars(select(Agent)).all():
-        if (agent.meta or {}).get("source") == "mc-file" and agent.agent_key not in seen:
+        if (agent.meta or {}).get("source") == AGENT_SOURCE_MC_FILE and agent.agent_key not in seen:
             db.execute(
                 update(ActivityLog).where(ActivityLog.agent_id == agent.id).values(agent_id=None)
             )

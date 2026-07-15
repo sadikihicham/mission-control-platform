@@ -84,6 +84,10 @@ def heartbeat(
     agent.blocker = body.blocker  # remis à None quand débloqué
     # tasks_done/total (hors Contract A) stockés dans meta, comme le sync mc.
     meta = dict(body.meta or {})
+    # "source" est une provenance dérivée serveur (cf. services.mc_sync.AGENT_SOURCE_MC_FILE) —
+    # jamais depuis l'entrée client, sinon un heartbeat pourrait se faire passer pour un agent
+    # issu des fichiers mc et se faire purger par erreur au prochain sync_once().
+    meta.pop("source", None)
     if body.tasks_done is not None:
         meta["tasks_done"] = body.tasks_done
     if body.tasks_total is not None:
