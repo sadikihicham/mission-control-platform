@@ -88,5 +88,5 @@ PYTHONPATH=apps/agent-cli python3 -m mc_platform working "task desc" 45 3 7   # 
 
 - Env var names and the heartbeat payload are frozen in `CONTRACTS.md` — the heartbeat body is intentionally aligned with the `mission-control` skill's JSON so the existing TUI works unchanged.
 - Multi-tenancy: `company_id` (nullable) is reserved on `users`/`projects` now; RLS isolation is deferred to V1.
-- CI (`.github/workflows/ci.yml`): API job runs `ruff check apps` + `pytest` against ephemeral postgres/redis services; web job runs `npm run lint` + `npm run build`.
+- No cloud CI (removed — GitHub Actions runs never fired despite the repo being public, and blocked on an account-level billing issue outside this project). The gate is local, before every PR: `ruff check apps` + `pytest` (API), `npm run lint` + `npm run build` (web) — the same commands the removed workflow ran.
 - Seed creates demo accounts (see `apps/api/seed.py`); default login `demo@infinity.ae` / `password`, plus role-specific accounts `admin/pm/cto/dev/viewer@mc.local`.
