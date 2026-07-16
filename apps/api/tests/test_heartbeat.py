@@ -1,6 +1,7 @@
 """Ingest heartbeat (Contract D) → DB."""
 from sqlalchemy import select
 
+from apps.api.core.config import settings
 from apps.api.models import Agent
 from apps.api.services.mc_sync import AGENT_SOURCE_MC_FILE
 from apps.api.tests.conftest import auth
@@ -125,3 +126,42 @@ def test_revoke_agent_token(client, admin_token, viewer_token):
     )
     assert r2.status_code == 202
     assert r2.json()["agent_token"]
+
+
+def test_heartbeat_global_ingest_disabled_rejects_new_agent(client, monkeypatch):
+    """MC_GLOBAL_INGEST_ENABLED=false : le secret partagé ne doit plus permettre
+    d'enrôler/faire vivre un agent jamais vu — fail-closed, même avec le bon token."""
+    monkeypatch.setattr(settings, "mc_global_ingest_enabled", False)
+    r = client.post(
+        "/agents/heartbeat",
+        headers={"X-MC-Token": "test-ingest"},
+        json={"agent": "never-seen-agent", "state": "idle"},
+    )
+    assert r.status_code == 403
+
+
+def test_heartbeat_global_ingest_disabled_still_allows_enrolled_agent(client, monkeypatch):
+    """Le flag ne coupe que le secret partagé (V0 compat) — un agent déjà enrôlé
+    avec son propre token individuel continue de fonctionner sans changement."""
+    enroll = client.post(
+        "/agents/heartbeat",
+        headers={"X-MC-Token": "test-ingest", "X-MC-Enroll": "1"},
+        json={"agent": "already-enrolled-agent", "state": "idle"},
+    )
+    token = enroll.json()["agent_token"]
+
+    monkeypatch.setattr(settings, "mc_global_ingest_enabled", False)
+    r = client.post(
+        "/agents/heartbeat",
+        headers={"X-MC-Token": token},
+        json={"agent": "already-enrolled-agent", "state": "working"},
+    )
+    assert r.status_code == 202
+
+    # Le secret partagé, lui, reste refusé pour ce même agent tant que désactivé.
+    r2 = client.post(
+        "/agents/heartbeat",
+        headers={"X-MC-Token": "test-ingest"},
+        json={"agent": "another-new-agent", "state": "idle"},
+    )
+    assert r2.status_code == 403

@@ -90,6 +90,9 @@ Schémas Pydantic exportés → OpenAPI → `packages/contracts` (types TS) pour
   version d'`agent-cli`, script `curl` manuel) n'est jamais enrôlé et garde le comportement
   d'origine — secret partagé accepté à chaque appel. Révocation : `POST
   /agents/{agent_key}/revoke-token` (admin) remet l'agent en attente de ré-enrôlement.
+  `MC_GLOBAL_INGEST_ENABLED` (défaut `true`, ajout post-hoc) : à `false`, le secret partagé
+  est refusé pour tout `agent_key` jamais vu (fail-closed) — un agent déjà enrôlé continue de
+  fonctionner avec son token individuel, seul le chemin d'enrôlement/legacy est coupé.
 - Body :
 ```json
 {

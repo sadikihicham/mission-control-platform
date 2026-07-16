@@ -52,6 +52,11 @@ def heartbeat(
         if not secrets.compare_digest(hash_reset_token(x_mc_token or ""), agent.token_hash):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "token d'agent invalide")
     else:
+        # Agent jamais vu : dépend du secret global V0, désactivable en prod embarquée
+        # (fail-closed — seuls les agents déjà enrôlés avec un credential individuel
+        # continuent de fonctionner). N'affecte pas l'ingest V1 (credential toujours requis).
+        if not settings.mc_global_ingest_enabled:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "secret d'ingest global désactivé")
         if not secrets.compare_digest(x_mc_token or "", settings.mc_ingest_token):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "token d'ingest invalide")
 

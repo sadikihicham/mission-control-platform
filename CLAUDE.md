@@ -87,7 +87,7 @@ A second bounded context, built later as its own phased chantier (gates P0→P9,
 
 **Realtime (Gate P9).** The V1 channel is now wired end-to-end: the outbox (`apps/api/agent_control/operations/outbox.py`, table `mc_outbox_events`) is drained via `SELECT ... FOR UPDATE SKIP LOCKED` and relayed onto the Redis `ac:events` channel — strictly disjoint from the V0 `mc:events`/`/ws` channel, no shared code — then fanned out over `/agent-control/ws` (identity/tenant/capability checked fail-closed before accept, filtered per tenant+topic). The frontend uses this for targeted React Query invalidation, with a 60s poll as a fallback net, not the primary path anymore. Also shipped in P9: `reports/export.csv` (streamed, tenant-scoped) and a Playwright + axe-core E2E/a11y suite run against an isolated stack (ports 8009/3200, own DB/redis) — never the shared dev stack.
 
-**Known gap.** `MC_GLOBAL_INGEST_ENABLED` is declared in config but never wired to the V0 heartbeat path — the actual safeguard in place today is `MC_INGEST_TOKEN` rotation.
+`MC_GLOBAL_INGEST_ENABLED` (default `true`) gates the V0 heartbeat's shared-secret fallback in `apps/api/routers/heartbeat.py`: set to `false` to fail-closed reject `X-MC-Token`-only enrollment/heartbeats for never-seen agents, while already-enrolled agents keep working on their individual per-agent token regardless. Does not affect V1 ingest, which always requires an individual agent credential.
 
 **Test convention specific to this module:** cross-tenant access always asserts **404, never 403** (see `test_agent_control_projects_p8.py`) — don't regress to 403 when adding endpoints here.
 
