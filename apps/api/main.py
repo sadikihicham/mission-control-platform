@@ -20,6 +20,7 @@ from apps.api.agent_control.control import routes as agent_control_control_route
 from apps.api.agent_control.ingest import routes as agent_control_ingest_router
 from apps.api.agent_control.operations import routes as agent_control_operations_router
 from apps.api.agent_control.overview import routes as agent_control_overview_router
+from apps.api.agent_control.projects import routes as agent_control_projects_router
 from apps.api.agent_control.registry import routes as agent_control_registry_router
 from apps.api.agent_control.runs import routes as agent_control_runs_router
 from apps.api.core.config import settings
@@ -90,6 +91,11 @@ app.include_router(agent_control_overview_router.router)
 # Agent Control V1 — registre d'agents (P7) : liste/détail/santé (view),
 # enregistrement/màj/credentials/cycle de vie (manage_agents). Tenant-scoped.
 app.include_router(agent_control_registry_router.router)
+# Agent Control V1 — projets & tâches (P8) : lecture (view) et mutation
+# (manage_projects) tenant-scoped. Ferme le gap assumé en P7 : les tables V0
+# projects/tasks portent désormais installation_id (migration 0016). Cross-tenant
+# = 404 (ADR-0003).
+app.include_router(agent_control_projects_router.router)
 # Agent Control V1 — ingest (événements + heartbeat), authentifié par credential
 # agent (hors JWT utilisateur). Distinct du heartbeat V0 `/agents/heartbeat`.
 app.include_router(agent_control_ingest_router.router)
