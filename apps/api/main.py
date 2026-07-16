@@ -19,6 +19,8 @@ from apps.api.agent_control.control import agent_routes as agent_control_agent_c
 from apps.api.agent_control.control import routes as agent_control_control_router
 from apps.api.agent_control.ingest import routes as agent_control_ingest_router
 from apps.api.agent_control.operations import routes as agent_control_operations_router
+from apps.api.agent_control.overview import routes as agent_control_overview_router
+from apps.api.agent_control.registry import routes as agent_control_registry_router
 from apps.api.agent_control.runs import routes as agent_control_runs_router
 from apps.api.core.config import settings
 from apps.api.integrations.envelopes import ErrorBody, ErrorEnvelope
@@ -82,6 +84,12 @@ app.include_router(heartbeat_router.router)
 app.include_router(ws_module.router)
 # Agent Control V1 (contexte + capacités, lecture seule, tenant résolu serveur).
 app.include_router(agent_control_context_router.router)
+# Agent Control V1 — vue d'ensemble (P7) : /health, /dashboard (agrégats tenant
+# dérivés serveur), activation d'installation (admin). Aucun compteur client.
+app.include_router(agent_control_overview_router.router)
+# Agent Control V1 — registre d'agents (P7) : liste/détail/santé (view),
+# enregistrement/màj/credentials/cycle de vie (manage_agents). Tenant-scoped.
+app.include_router(agent_control_registry_router.router)
 # Agent Control V1 — ingest (événements + heartbeat), authentifié par credential
 # agent (hors JWT utilisateur). Distinct du heartbeat V0 `/agents/heartbeat`.
 app.include_router(agent_control_ingest_router.router)

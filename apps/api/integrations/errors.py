@@ -99,3 +99,13 @@ class BudgetExceeded(HostIntegrationError):
 
     code = ErrorCode.budget_exceeded
     http_status = 409
+
+
+class Conflict(HostIntegrationError):
+    """Conflit d'unicité générique (ex. clé d'agent déjà prise dans le tenant).
+
+    Code `conflict` (409) figé dans les enveloppes V1 (§6). Distinct de
+    `StateConflict` (transition d'état) et `IdempotencyConflict` (rejeu de clé)."""
+
+    code = ErrorCode.conflict
+    http_status = 409
