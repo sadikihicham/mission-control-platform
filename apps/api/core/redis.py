@@ -11,6 +11,10 @@ import redis.asyncio as aioredis
 from apps.api.core.config import settings
 
 EVENTS_CHANNEL = "mc:events"
+# Canal temps réel V1 d'Agent Control (Contract E V1, §10) — distinct de `mc:events`.
+# Alimenté par le relais d'outbox (`mc_outbox_events` → publish), consommé par le
+# WS `/agent-control/ws` (fan-out filtré par tenant + topic). Jamais mélangé au V0.
+AC_EVENTS_CHANNEL = "ac:events"
 
 _sync: redis.Redis | None = None
 _async: aioredis.Redis | None = None
