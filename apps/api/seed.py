@@ -9,7 +9,7 @@ Ne crée plus aucun compte utilisateur de démo (retiré : ces comptes réappara
 import os
 import sys
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from apps.api.core.db import get_sessionmaker
@@ -130,6 +130,22 @@ def run() -> None:
             )
             db.add(installation)
             print(f"+ installation locale {LOCAL_INSTALLATION_KEY} ({LOCAL_INSTALLATION_ID})")
+        db.commit()
+
+        # Rattache les projets/tâches (seed ou V0) au tenant local : même
+        # backfill déterministe que la migration 0016, mais rejoué ici car
+        # conftest reconstruit le schéma via create_all (sans alembic) et le seed
+        # crée de nouveaux projets après la migration. Idempotent (WHERE NULL).
+        db.execute(
+            update(Project)
+            .where(Project.installation_id.is_(None))
+            .values(installation_id=LOCAL_INSTALLATION_ID)
+        )
+        db.execute(
+            update(Task)
+            .where(Task.installation_id.is_(None))
+            .values(installation_id=LOCAL_INSTALLATION_ID)
+        )
         db.commit()
 
         for user in db.scalars(select(User)).all():
