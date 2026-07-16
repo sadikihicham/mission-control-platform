@@ -45,7 +45,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/apps__api__schemas__agent__AgentOut"
+                    "$ref": "#/components/schemas/AgentOut"
                   },
                   "type": "array",
                   "title": "Response Get Agents Agents Get"
@@ -1160,7 +1160,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/apps__api__agent_control__registry__schemas__AgentOut"
+                  "$ref": "#/components/schemas/AgentRegistryOut"
                 }
               }
             }
@@ -1207,7 +1207,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/apps__api__agent_control__registry__schemas__AgentOut"
+                  "$ref": "#/components/schemas/AgentRegistryOut"
                 }
               }
             }
@@ -1262,7 +1262,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/apps__api__agent_control__registry__schemas__AgentOut"
+                  "$ref": "#/components/schemas/AgentRegistryOut"
                 }
               }
             }
@@ -1518,7 +1518,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/apps__api__agent_control__registry__schemas__AgentOut"
+                  "$ref": "#/components/schemas/AgentRegistryOut"
                 }
               }
             }
@@ -1565,7 +1565,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/apps__api__agent_control__registry__schemas__AgentOut"
+                  "$ref": "#/components/schemas/AgentRegistryOut"
                 }
               }
             }
@@ -1612,7 +1612,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/apps__api__agent_control__registry__schemas__AgentOut"
+                  "$ref": "#/components/schemas/AgentRegistryOut"
                 }
               }
             }
@@ -3437,7 +3437,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/apps__api__agent_control__registry__schemas__AgentOut"
+              "$ref": "#/components/schemas/AgentRegistryOut"
             },
             "type": "array",
             "title": "Items"
@@ -3452,6 +3452,317 @@
           "page_info"
         ],
         "title": "AgentListOut"
+      },
+      "AgentOut": {
+        "properties": {
+          "agent": {
+            "type": "string",
+            "title": "Agent"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "task": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task"
+          },
+          "module": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Module"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "branch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branch"
+          },
+          "blocker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker"
+          },
+          "progress": {
+            "type": "integer",
+            "title": "Progress",
+            "default": 0
+          },
+          "tasks_done": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasks Done"
+          },
+          "tasks_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tasks Total"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Seconds"
+          },
+          "token_issued_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Issued At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agent",
+          "state"
+        ],
+        "title": "AgentOut"
+      },
+      "AgentRegistryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "agent_key": {
+            "type": "string",
+            "title": "Agent Key"
+          },
+          "installation_id": {
+            "type": "string",
+            "title": "Installation Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "runtime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "client_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Version"
+          },
+          "environment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Capabilities"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "last_heartbeat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat"
+          },
+          "last_sequence": {
+            "type": "integer",
+            "title": "Last Sequence",
+            "default": 0
+          },
+          "registered_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered By"
+          },
+          "registered_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "project_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Project Ids"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "agent_key",
+          "installation_id",
+          "status",
+          "state",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AgentRegistryOut",
+        "description": "Forme de sortie d'un agent du registre (contrat §13 `agent_out`)."
       },
       "AgentUpdate": {
         "properties": {
@@ -5998,7 +6309,7 @@
           },
           "agents": {
             "items": {
-              "$ref": "#/components/schemas/apps__api__schemas__agent__AgentOut"
+              "$ref": "#/components/schemas/AgentOut"
             },
             "type": "array",
             "title": "Agents",
@@ -6827,7 +7138,7 @@
           },
           "agents": {
             "items": {
-              "$ref": "#/components/schemas/apps__api__schemas__agent__AgentOut"
+              "$ref": "#/components/schemas/AgentOut"
             },
             "type": "array",
             "title": "Agents",
@@ -7293,317 +7604,6 @@
           "type"
         ],
         "title": "ValidationError"
-      },
-      "apps__api__agent_control__registry__schemas__AgentOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "agent_key": {
-            "type": "string",
-            "title": "Agent Key"
-          },
-          "installation_id": {
-            "type": "string",
-            "title": "Installation Id"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "runtime": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Runtime"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
-          },
-          "client_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Version"
-          },
-          "environment": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Environment"
-          },
-          "capabilities": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Capabilities"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "state": {
-            "type": "string",
-            "title": "State"
-          },
-          "last_heartbeat": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Heartbeat"
-          },
-          "last_sequence": {
-            "type": "integer",
-            "title": "Last Sequence",
-            "default": 0
-          },
-          "registered_by": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Registered By"
-          },
-          "registered_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Registered At"
-          },
-          "revoked_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Revoked At"
-          },
-          "project_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Project Ids"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "agent_key",
-          "installation_id",
-          "status",
-          "state",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "AgentOut",
-        "description": "Forme de sortie d'un agent du registre (contrat §13 `agent_out`)."
-      },
-      "apps__api__schemas__agent__AgentOut": {
-        "properties": {
-          "agent": {
-            "type": "string",
-            "title": "Agent"
-          },
-          "state": {
-            "type": "string",
-            "title": "State"
-          },
-          "task": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Task"
-          },
-          "module": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Module"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "branch": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Branch"
-          },
-          "blocker": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Blocker"
-          },
-          "progress": {
-            "type": "integer",
-            "title": "Progress",
-            "default": 0
-          },
-          "tasks_done": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tasks Done"
-          },
-          "tasks_total": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tasks Total"
-          },
-          "updated_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated At"
-          },
-          "age_seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Age Seconds"
-          },
-          "token_issued_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Token Issued At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "agent",
-          "state"
-        ],
-        "title": "AgentOut"
       }
     },
     "securitySchemes": {

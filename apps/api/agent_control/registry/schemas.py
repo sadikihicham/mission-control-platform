@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from apps.api.integrations.envelopes import PageInfo
 
 
-class AgentOut(BaseModel):
+class AgentRegistryOut(BaseModel):
     """Forme de sortie d'un agent du registre (contrat §13 `agent_out`)."""
 
     id: str
@@ -34,7 +34,7 @@ class AgentOut(BaseModel):
 
 
 class AgentListOut(BaseModel):
-    items: list[AgentOut]
+    items: list[AgentRegistryOut]
     page_info: PageInfo
 
 

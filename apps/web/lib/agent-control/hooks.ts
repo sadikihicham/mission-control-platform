@@ -29,7 +29,7 @@ import type {
   RunListOut,
   RunTimelineOut,
   UsageListOut,
-  apps__api__agent_control__registry__schemas__AgentOut as AcAgent,
+  AgentRegistryOut as AcAgent,
 } from "@/lib/contracts";
 
 export type { AcAgent };

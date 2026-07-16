@@ -40,8 +40,49 @@ export interface AgentHealthOut {
 
 
 export interface AgentListOut {
-  items: apps__api__agent_control__registry__schemas__AgentOut[];
+  items: AgentRegistryOut[];
   page_info: PageInfo;
+}
+
+
+export interface AgentOut {
+  agent: string;
+  state: string;
+  task: string | null;
+  module: string | null;
+  label: string | null;
+  branch: string | null;
+  blocker: string | null;
+  progress: number;
+  tasks_done: number | null;
+  tasks_total: number | null;
+  updated_at: string | null;
+  age_seconds: number | null;
+  token_issued_at: string | null;
+}
+
+
+export interface AgentRegistryOut {
+  id: string;
+  agent_key: string;
+  installation_id: string;
+  display_name: string | null;
+  description: string | null;
+  runtime: string | null;
+  provider: string | null;
+  client_version: string | null;
+  environment: string | null;
+  capabilities: string[];
+  status: string;
+  state: string;
+  last_heartbeat: string | null;
+  last_sequence: number;
+  registered_by: string | null;
+  registered_at: string | null;
+  revoked_at: string | null;
+  project_ids: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 
@@ -514,7 +555,7 @@ export interface ProjectDetail {
   editable: boolean;
   repo: string | null;
   tasks: Task[];
-  agents: apps__api__schemas__agent__AgentOut[];
+  agents: AgentOut[];
 }
 
 
@@ -653,7 +694,7 @@ export interface Task {
   module: string | null;
   progress: number;
   state: string;
-  agents: apps__api__schemas__agent__AgentOut[];
+  agents: AgentOut[];
   subtasks: SubTask[];
 }
 
@@ -740,45 +781,4 @@ export interface UserUpdateIn {
   full_name: string | null;
   civility: string | null;
   is_active: boolean | null;
-}
-
-
-export interface apps__api__agent_control__registry__schemas__AgentOut {
-  id: string;
-  agent_key: string;
-  installation_id: string;
-  display_name: string | null;
-  description: string | null;
-  runtime: string | null;
-  provider: string | null;
-  client_version: string | null;
-  environment: string | null;
-  capabilities: string[];
-  status: string;
-  state: string;
-  last_heartbeat: string | null;
-  last_sequence: number;
-  registered_by: string | null;
-  registered_at: string | null;
-  revoked_at: string | null;
-  project_ids: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-
-export interface apps__api__schemas__agent__AgentOut {
-  agent: string;
-  state: string;
-  task: string | null;
-  module: string | null;
-  label: string | null;
-  branch: string | null;
-  blocker: string | null;
-  progress: number;
-  tasks_done: number | null;
-  tasks_total: number | null;
-  updated_at: string | null;
-  age_seconds: number | null;
-  token_issued_at: string | null;
 }

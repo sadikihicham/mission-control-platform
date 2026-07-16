@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from apps.api.agent_control.registry.schemas import (
     AgentCreate,
     AgentHealthOut,
-    AgentOut,
+    AgentRegistryOut,
     AgentUpdate,
     CredentialCreate,
 )
@@ -97,11 +97,11 @@ def _project_ids(db: Session, agent: Agent) -> list[str]:
     return ids
 
 
-def serialize_agent(db: Session, agent: Agent) -> AgentOut:
+def serialize_agent(db: Session, agent: Agent) -> AgentRegistryOut:
     """Projette un `Agent` ORM vers le DTO de contrat `agent_out`."""
     state = agent.state.value if hasattr(agent.state, "value") else str(agent.state)
     created = agent.registered_at or agent.updated_at
-    return AgentOut(
+    return AgentRegistryOut(
         id=str(agent.id),
         agent_key=agent.agent_key,
         installation_id=str(agent.installation_id) if agent.installation_id else "",

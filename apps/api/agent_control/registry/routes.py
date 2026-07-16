@@ -12,7 +12,7 @@ from apps.api.agent_control.registry.schemas import (
     AgentCreate,
     AgentHealthOut,
     AgentListOut,
-    AgentOut,
+    AgentRegistryOut,
     AgentUpdate,
     CredentialCreate,
     CredentialCreated,
@@ -68,34 +68,34 @@ def list_agents(
     )
 
 
-@router.post("", response_model=AgentOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=AgentRegistryOut, status_code=status.HTTP_201_CREATED)
 def register_agent(
     body: AgentCreate,
     ctx: HostContext = Depends(get_host_context),
     db: Session = Depends(get_db),
-) -> AgentOut:
+) -> AgentRegistryOut:
     require_capability(ctx, Capability.manage_agents)
     agent = service.register_agent(db, ctx, body)
     return service.serialize_agent(db, agent)
 
 
-@router.get("/{agent_id}", response_model=AgentOut)
+@router.get("/{agent_id}", response_model=AgentRegistryOut)
 def get_agent(
     agent_id: str,
     ctx: HostContext = Depends(get_host_context),
     db: Session = Depends(get_db),
-) -> AgentOut:
+) -> AgentRegistryOut:
     require_capability(ctx, Capability.view)
     return service.serialize_agent(db, service.get_agent(db, ctx, agent_id))
 
 
-@router.patch("/{agent_id}", response_model=AgentOut)
+@router.patch("/{agent_id}", response_model=AgentRegistryOut)
 def update_agent(
     agent_id: str,
     body: AgentUpdate,
     ctx: HostContext = Depends(get_host_context),
     db: Session = Depends(get_db),
-) -> AgentOut:
+) -> AgentRegistryOut:
     require_capability(ctx, Capability.manage_agents)
     return service.serialize_agent(db, service.update_agent(db, ctx, agent_id, body))
 
@@ -156,31 +156,31 @@ def revoke_credential(
     service.revoke_credential(db, ctx, agent_id, credential_id)
 
 
-@router.post("/{agent_id}/suspend", response_model=AgentOut)
+@router.post("/{agent_id}/suspend", response_model=AgentRegistryOut)
 def suspend_agent(
     agent_id: str,
     ctx: HostContext = Depends(get_host_context),
     db: Session = Depends(get_db),
-) -> AgentOut:
+) -> AgentRegistryOut:
     require_capability(ctx, Capability.manage_agents)
     return service.serialize_agent(db, service.set_status(db, ctx, agent_id, "suspended"))
 
 
-@router.post("/{agent_id}/resume", response_model=AgentOut)
+@router.post("/{agent_id}/resume", response_model=AgentRegistryOut)
 def resume_agent(
     agent_id: str,
     ctx: HostContext = Depends(get_host_context),
     db: Session = Depends(get_db),
-) -> AgentOut:
+) -> AgentRegistryOut:
     require_capability(ctx, Capability.manage_agents)
     return service.serialize_agent(db, service.set_status(db, ctx, agent_id, "active"))
 
 
-@router.post("/{agent_id}/archive", response_model=AgentOut)
+@router.post("/{agent_id}/archive", response_model=AgentRegistryOut)
 def archive_agent(
     agent_id: str,
     ctx: HostContext = Depends(get_host_context),
     db: Session = Depends(get_db),
-) -> AgentOut:
+) -> AgentRegistryOut:
     require_capability(ctx, Capability.manage_agents)
     return service.serialize_agent(db, service.set_status(db, ctx, agent_id, "archived"))
