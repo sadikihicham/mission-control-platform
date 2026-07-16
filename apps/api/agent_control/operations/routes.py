@@ -12,7 +12,10 @@ ADR-0003) :
 Les routes ne portent aucune logique métier : elles délèguent aux services, qui
 reçoivent le `HostContext` et appliquent bornage tenant + `require_capability`.
 """
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.api.agent_control.operations import alerts as alerts_service
@@ -80,6 +83,49 @@ def get_usage(
         ),
         items=[UsageRecordOut.model_validate(r) for r in rows],
         page_info=PageInfo(next_cursor=next_cursor, limit=limit, has_more=has_more),
+    )
+
+
+def _parse_dt(value: str | None) -> datetime | None:
+    """Parse une borne temporelle ISO-8601 ; invalide/absent → None (ignorée)."""
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+@router.get("/reports/export.csv")
+def export_usage_csv(
+    ctx: HostContext = Depends(get_host_context),
+    db: Session = Depends(get_db),
+    project_id: str | None = Query(default=None),
+    agent_id: str | None = Query(default=None),
+    since: str | None = Query(default=None),
+    until: str | None = Query(default=None),
+) -> StreamingResponse:
+    """Export CSV streamé des consommations du tenant (capacité `view_costs`).
+
+    Même source et mêmes filtres que `GET /usage` (réconciliable), borné au tenant
+    du `HostContext` (ADR-0003) : aucune fuite cross-tenant. Le coût est exporté en
+    chaîne décimale (jamais float). Réponse en flux (`yield_per`) : jamais tout le
+    résultat en mémoire.
+    """
+    require_capability(ctx, Capability.view_costs)
+    rows = usage_service.collect_usage_csv_rows(
+        db,
+        ctx,
+        project_id=project_id,
+        agent_id=agent_id,
+        since=_parse_dt(since),
+        until=_parse_dt(until),
+    )
+    filename = f"agent-control-usage-{ctx.installation.installation_key}.csv"
+    return StreamingResponse(
+        usage_service.csv_lines(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

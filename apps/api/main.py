@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from apps.api.agent_control import realtime as agent_control_realtime
 from apps.api.agent_control.control import agent_routes as agent_control_agent_cmd_router
 from apps.api.agent_control.control import routes as agent_control_control_router
 from apps.api.agent_control.ingest import routes as agent_control_ingest_router
@@ -36,9 +37,13 @@ from apps.api.routers import projects as projects_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Démarre l'abonné Redis + le scanner stale (realtime / M4).
+    # Démarre l'abonné Redis + le scanner stale (realtime V0 / M4).
     await ws_module.start()
+    # Démarre le temps réel V1 Agent Control : abonné canal `ac:events` + relais
+    # d'outbox (persistance → publication, Contract E V1 §10). Distinct du V0.
+    await agent_control_realtime.start()
     yield
+    await agent_control_realtime.stop()
     await ws_module.stop()
 
 
@@ -83,6 +88,9 @@ app.include_router(projects_router.router)
 app.include_router(auth_router.router)
 app.include_router(heartbeat_router.router)
 app.include_router(ws_module.router)
+# WS temps réel V1 Agent Control (`/agent-control/ws`) : signaux tenant-scopés
+# (invalidation ciblée côté front). Canal `ac:events`, distinct du `/ws` V0.
+app.include_router(agent_control_realtime.router)
 # Agent Control V1 (contexte + capacités, lecture seule, tenant résolu serveur).
 app.include_router(agent_control_context_router.router)
 # Agent Control V1 — vue d'ensemble (P7) : /health, /dashboard (agrégats tenant

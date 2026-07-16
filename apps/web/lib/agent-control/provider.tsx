@@ -24,6 +24,7 @@ import {
 
 import { acRequest } from "./client";
 import { AC_RTL_LANGS, acTranslate, type AcLang } from "./i18n";
+import { useAcRealtime } from "./realtime";
 import type { Capability, HostContext } from "@/lib/contracts";
 
 export interface AgentControlContextValue {
@@ -38,6 +39,10 @@ export interface AgentControlContextValue {
   basePath: string;
   ready: boolean;
   error: unknown;
+  /** Temps réel V1 : état de connexion + (dé)souscription de topics dynamiques. */
+  realtimeConnected: boolean;
+  subscribeTopics: (topics: string[]) => void;
+  unsubscribeTopics: (topics: string[]) => void;
 }
 
 const Ctx = createContext<AgentControlContextValue | null>(null);
@@ -106,6 +111,11 @@ function Inner({
     enabled: needContext,
   });
 
+  const resolvedInstallation =
+    installationId ?? ctxQuery.data?.installation?.id ?? null;
+  // Temps réel V1 : une seule connexion WS par provider, tenant-scopée.
+  const { connected, subscribe, unsubscribe } = useAcRealtime(resolvedInstallation);
+
   const value = useMemo<AgentControlContextValue>(() => {
     const resolvedCaps: Capability[] =
       capabilities.length > 0
@@ -114,8 +124,6 @@ function Inner({
     const caps = new Set<Capability>(resolvedCaps);
     const resolvedLocale: AcLang =
       locale ?? ((ctxQuery.data?.locale as AcLang | undefined) ?? "fr");
-    const resolvedInstallation =
-      installationId ?? ctxQuery.data?.installation?.id ?? null;
     return {
       embedded,
       locale: resolvedLocale,
@@ -128,18 +136,24 @@ function Inner({
       basePath,
       ready: !needContext || ctxQuery.isSuccess,
       error: ctxQuery.error,
+      realtimeConnected: connected,
+      subscribeTopics: subscribe,
+      unsubscribeTopics: unsubscribe,
     };
   }, [
     embedded,
     basePath,
     locale,
-    installationId,
+    resolvedInstallation,
     capabilities,
     onNavigate,
     needContext,
     ctxQuery.data,
     ctxQuery.isSuccess,
     ctxQuery.error,
+    connected,
+    subscribe,
+    unsubscribe,
   ]);
 
   return (
