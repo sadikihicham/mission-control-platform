@@ -24,3 +24,7 @@ infra/.env.prod
 .DS_Store
 docs/*.pdf
 .gstack/
+
+# Worktrees d'agents + rapports d'audit locaux (jamais destinés à être committés)
+.claude/worktrees/
+.cartographer/

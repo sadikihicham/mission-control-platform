@@ -14,7 +14,7 @@ Backend runs in Docker; frontend runs on the host.
 
 ```bash
 make up        # postgres + redis + api (auto alembic upgrade + seed) → API on :8008
-make web       # Next.js dev server (host) → :3100  (login: demo@infinity.ae / password)
+make web       # Next.js dev server (host) → :3100  (login: whichever admin account exists in the DB — seed no longer creates one, see Conventions)
 make dev       # = make up, then run `make web` in another terminal
 make logs      # follow API logs
 make psql      # psql into the DB (no host port exposed)
@@ -89,4 +89,4 @@ PYTHONPATH=apps/agent-cli python3 -m mc_platform working "task desc" 45 3 7   # 
 - Env var names and the heartbeat payload are frozen in `CONTRACTS.md` — the heartbeat body is intentionally aligned with the `mission-control` skill's JSON so the existing TUI works unchanged.
 - Multi-tenancy: abandoned for this MVP — the reserved `company_id` column was never wired to a filter and was dropped (migration `0007_drop_company_id`). If multi-tenant work restarts, reintroduce the column together with an active RLS filter in the same change, not ahead of it.
 - No cloud CI (removed — GitHub Actions runs never fired despite the repo being public, and blocked on an account-level billing issue outside this project). The gate is local, before every PR: `ruff check apps` + `pytest` (API), `npm run lint` + `npm run build` (web) — the same commands the removed workflow ran.
-- Seed creates demo accounts (see `apps/api/seed.py`); default login `demo@infinity.ae` / `password`, plus role-specific accounts `admin/pm/cto/dev/viewer@mc.local`.
+- `apps/api/seed.py` no longer creates any demo user account (intentional — they kept reappearing on every reseed after being deleted). Dev login uses whichever admin account exists in the DB (created manually). Tests get their own disposable `admin/pm/viewer@mc.local` accounts via `conftest.py`'s `_seed_role_accounts()`, decoupled from the dev seed.
