@@ -52,4 +52,6 @@ export const Icon = {
   menu: _i(<path d="M3 6h18M3 12h18M3 18h18" />),
   bell: _i(<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" />),
   shield: _i(<path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3Z" />),
+  volume: _i(<><path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="M15.5 8.5a4.5 4.5 0 0 1 0 7M18.5 6a8 8 0 0 1 0 12" /></>),
+  mute: _i(<><path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="m16 9 5 6M21 9l-5 6" /></>),
 } as const;
