@@ -88,3 +88,14 @@ class StateConflict(HostIntegrationError):
 
     code = ErrorCode.state_conflict
     http_status = 409
+
+
+class BudgetExceeded(HostIntegrationError):
+    """Budget applicable dépassé avec `on_exceed=block_new_runs` — action bloquée (P6).
+
+    Le budget gate durcit la décision de policy au point de contrôle : une nouvelle
+    commande n'est pas créée tant que le budget reste dépassé (fail-closed sur le
+    coût). Le code `budget_exceeded` est figé dans les enveloppes V1."""
+
+    code = ErrorCode.budget_exceeded
+    http_status = 409

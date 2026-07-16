@@ -30,6 +30,7 @@ from apps.api.agent_control.control.schemas import (
     PolicyCreate,
     PolicyUpdate,
 )
+from apps.api.agent_control.operations import audit as audit_service
 from apps.api.core.config import settings
 from apps.api.integrations.errors import (
     ResourceNotFound,
@@ -167,6 +168,20 @@ def _audit_decision(
             type="policy.evaluated",
             payload=payload,
         )
+    )
+    # Audit complet P6 (append-only, redacted) — complète l'ActivityLog historique.
+    audit_service.audit_from_context(
+        db,
+        ctx,
+        action="policy.evaluated",
+        target_type="agent",
+        target_id=str(agent.id),
+        after={
+            "command_type": command_type,
+            "effect": decision.effect,
+            "policy_id": str(decision.policy_id) if decision.policy_id else None,
+        },
+        metadata=audit_context,
     )
 
 

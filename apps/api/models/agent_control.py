@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    DDL,
     BigInteger,
     Boolean,
     DateTime,
@@ -29,6 +30,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -839,3 +841,33 @@ class MCAuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+# Append-only en base (défense en profondeur) : le trigger refuse tout UPDATE/DELETE
+# sur `mc_audit_logs`. La migration 0015 le pose pour les environnements Alembic
+# (dev/prod) ; ces DDL events le reposent quand le schéma est bâti via
+# `Base.metadata.create_all` (harness de tests), pour que la garantie append-only
+# soit active partout. Chemins mutuellement exclusifs (create_all n'est pas exécuté
+# en prod), donc jamais de double création sur une même base. PostgreSQL uniquement.
+# NB : `%%` — l'objet `DDL` applique une substitution `%`-formatée ; on échappe le
+# placeholder PL/pgSQL pour qu'il redevienne un seul `%` côté PostgreSQL.
+_AUDIT_APPEND_ONLY_FN = DDL(
+    "CREATE OR REPLACE FUNCTION mc_audit_logs_append_only() RETURNS trigger AS $$ "
+    "BEGIN RAISE EXCEPTION 'mc_audit_logs is append-only: %% not allowed', TG_OP; END; "
+    "$$ LANGUAGE plpgsql"
+)
+_AUDIT_APPEND_ONLY_TRG = DDL(
+    "CREATE TRIGGER trg_mc_audit_logs_append_only "
+    "BEFORE UPDATE OR DELETE ON mc_audit_logs "
+    "FOR EACH ROW EXECUTE FUNCTION mc_audit_logs_append_only()"
+)
+event.listen(
+    MCAuditLog.__table__,
+    "after_create",
+    _AUDIT_APPEND_ONLY_FN.execute_if(dialect="postgresql"),
+)
+event.listen(
+    MCAuditLog.__table__,
+    "after_create",
+    _AUDIT_APPEND_ONLY_TRG.execute_if(dialect="postgresql"),
+)

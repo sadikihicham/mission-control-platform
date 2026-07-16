@@ -32,9 +32,12 @@ from sqlalchemy.orm import Session
 from apps.api.agent_control.control.policies import evaluate_policy
 from apps.api.agent_control.control.schemas import CommandResultIn, CommandSubmit
 from apps.api.agent_control.ingest.auth import AgentCredentialContext, require_scope
+from apps.api.agent_control.operations import audit as audit_service
+from apps.api.agent_control.operations import budgets as budgets_service
 from apps.api.agent_control.runs import service as runs_service
 from apps.api.core.config import settings
 from apps.api.integrations.errors import (
+    BudgetExceeded,
     PermissionDenied,
     ResourceNotFound,
     StateConflict,
@@ -173,6 +176,26 @@ def submit_command(
             details={"effect": "deny", "policy_id": str(decision.policy_id or "")},
         )
 
+    # Articulation budget × policy (P6) : un budget applicable dépassé durcit
+    # l'effet de la policy au point de contrôle. `block_new_runs` → aucune commande
+    # (budget_exceeded) ; `require_approval` → force l'approbation même si `allow`.
+    gate = budgets_service.budget_gate(
+        db, tenant, agent_id=agent.id, project_id=run.project_id
+    )
+    if gate.behavior == budgets_service.GATE_BLOCK:
+        db.commit()  # persiste l'audit de la décision de policy
+        raise BudgetExceeded(
+            "nouvelle commande bloquée : budget dépassé",
+            details={
+                "budget_id": str(gate.budget_id or ""),
+                "consumed": str(gate.consumed) if gate.consumed is not None else None,
+                "limit": str(gate.limit) if gate.limit is not None else None,
+            },
+        )
+    effective_effect = decision.effect
+    if gate.behavior == budgets_service.GATE_REQUIRE_APPROVAL and decision.effect == "allow":
+        effective_effect = "require_approval"
+
     now = _now()
     ttl = body.expires_in_seconds or settings.mc_command_default_ttl_seconds
     expires_at = now + timedelta(seconds=ttl)
@@ -188,12 +211,13 @@ def submit_command(
         idempotency_key=idem,
         requested_by=_as_uuid(ctx.user.local_user_id),
         policy_id=decision.policy_id,
-        policy_effect=decision.effect,
+        # Effet EFFECTIF appliqué (policy durcie par le budget gate le cas échéant).
+        policy_effect=effective_effect,
         risk_level=risk_level,
         expires_at=expires_at,
     )
 
-    if decision.effect == "require_approval":
+    if effective_effect == "require_approval":
         # Commande retenue : NON libérée tant qu'aucune décision positive n'existe.
         approval = ApprovalRequest(
             installation_id=tenant,
@@ -205,7 +229,11 @@ def submit_command(
             action_type=body.command_type,
             risk_level=risk_level or "medium",
             title=f"Approbation requise : {body.command_type}",
-            context={"command_type": body.command_type, "run_id": str(run.id)},
+            context={
+                "command_type": body.command_type,
+                "run_id": str(run.id),
+                "reason": "budget" if decision.effect == "allow" else "policy",
+            },
             requested_by=_as_uuid(ctx.user.local_user_id),
             requested_by_agent=False,
             status="pending",
@@ -246,6 +274,25 @@ def submit_command(
             },
         )
 
+    db.flush()  # matérialise cmd.id pour l'audit
+    # Audit append-only redacted de la soumission opérateur (décision de contrôle).
+    audit_service.audit_from_context(
+        db,
+        ctx,
+        action="command.submitted",
+        target_type="command",
+        target_id=str(cmd.id),
+        after={
+            "command_type": body.command_type,
+            "effect": effective_effect,
+            "run_id": str(run.id),
+            "agent_id": str(agent.id),
+        },
+        metadata={
+            "policy_id": str(decision.policy_id) if decision.policy_id else None,
+            "budget_gate": gate.behavior,
+        },
+    )
     db.commit()
     db.refresh(cmd)
     return SubmitResult(command=cmd, created=True)
