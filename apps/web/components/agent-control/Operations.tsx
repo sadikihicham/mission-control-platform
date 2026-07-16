@@ -2,6 +2,9 @@
 
 // Écrans opérationnels (SP5 §8) : alertes (ack/resolve), coûts (usage réel),
 // audit (redacted côté serveur — on n'affiche jamais de brut sensible ici).
+import { useState } from "react";
+
+import { acDownload, AcApiError } from "@/lib/agent-control/client";
 import { useAlertAction, useAlerts, useAudit, useUsage } from "@/lib/agent-control/hooks";
 import { useAgentControl } from "@/lib/agent-control/provider";
 import { AcEmpty, AcError, AcLoading } from "./States";
@@ -66,8 +69,22 @@ function AlertActions({ alertId, status }: { alertId: string; status: string }) 
 }
 
 export function Costs() {
-  const { t } = useAgentControl();
+  const { t, can, installationId } = useAgentControl();
   const q = useUsage();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function onExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      await acDownload("/reports/export.csv", "agent-control-usage.csv", { installationId });
+    } catch (e) {
+      setExportError(e instanceof AcApiError ? e.message : String(e));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (q.isLoading) return <AcLoading />;
   if (q.isError) return <AcError error={q.error} onRetry={() => void q.refetch()} />;
@@ -76,7 +93,20 @@ export function Costs() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-semibold text-neutral-100">{t("nav_costs")}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-neutral-100">{t("nav_costs")}</h2>
+        {can("view_costs") && (
+          <button
+            type="button"
+            onClick={() => void onExport()}
+            disabled={exporting}
+            className="rounded-lg border border-neutral-700 px-3 py-1.5 text-sm text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+          >
+            {exporting ? t("exporting") : t("export_csv")}
+          </button>
+        )}
+      </div>
+      {exportError && <p className="text-sm text-red-400">{exportError}</p>}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Kpi label={t("total_cost")} value={`${d.summary.total_cost} ${d.summary.currency}`} />
         <Kpi label="tokens" value={d.summary.total_tokens} />

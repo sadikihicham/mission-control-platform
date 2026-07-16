@@ -137,3 +137,38 @@ export async function acRequest<T>(path: string, opts: RequestOptions = {}): Pro
   if (!res.ok) throw await parseError(res);
   return (await res.json()) as T;
 }
+
+/**
+ * Télécharge un export (ex. `/reports/export.csv`) en portant le JWT hôte.
+ *
+ * Un simple `<a href>` n'inclurait pas l'en-tête Authorization : on récupère
+ * donc le corps via `fetch`, puis on déclenche un téléchargement via un blob.
+ * Erreurs typées identiques aux autres appels (401/403/404 → `AcApiError`).
+ */
+export async function acDownload(
+  path: string,
+  filename: string,
+  opts: Pick<RequestOptions, "query" | "installationId"> = {},
+): Promise<void> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (opts.installationId) headers["X-MC-Installation"] = opts.installationId;
+
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path, opts.query), { headers, cache: "no-store" });
+  } catch {
+    throw new AcApiError(0, "network_error", "Réseau indisponible (hors-ligne)");
+  }
+  if (!res.ok) throw await parseError(res);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
