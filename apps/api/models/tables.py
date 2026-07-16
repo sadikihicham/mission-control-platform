@@ -58,6 +58,13 @@ class Project(Base):
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Tenant Agent Control V1 (extension ADDITIVE, migration 0016) : nullable en
+    # base pour compat V0 (ADR-0007), obligatoire au niveau applicatif pour toute
+    # lecture/mutation V1. Résolu serveur depuis le JWT (ADR-0003), jamais d'un
+    # body. RESTRICT : jamais de cascade destructive sur une installation tenant.
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     status: Mapped[ProjectStatus] = mapped_column(
         Enum(ProjectStatus, name="project_status"), default=ProjectStatus.in_dev
     )
@@ -153,6 +160,14 @@ class Task(Base):
 
     id: Mapped[uuid.UUID] = _uuid_pk()
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"))
+    # Tenant Agent Control V1 (extension ADDITIVE, migration 0016) : nullable en
+    # base pour compat V0 (ADR-0007). Redondant avec `project.installation_id`
+    # mais matérialisé pour borner les requêtes tâche par tenant sans jointure
+    # systématique. Cohérence garantie côté service (une tâche hérite du tenant
+    # de son projet). RESTRICT : jamais de cascade destructive sur un tenant.
+    installation_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("mc_installations.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     # Sous-tâche : pointe la tâche parente (un seul niveau). NULL = tâche racine.
     parent_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("tasks.id", ondelete="CASCADE"), nullable=True, index=True

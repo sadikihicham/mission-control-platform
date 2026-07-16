@@ -15,6 +15,7 @@ import type { HealthOut } from "@/lib/contracts";
 const TABS: { seg: string; key: string }[] = [
   { seg: "", key: "nav_dashboard" },
   { seg: "agents", key: "nav_agents" },
+  { seg: "projects", key: "nav_projects" },
   { seg: "runs", key: "nav_runs" },
   { seg: "approvals", key: "nav_approvals" },
   { seg: "alerts", key: "nav_alerts" },

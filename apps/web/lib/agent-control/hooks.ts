@@ -14,6 +14,15 @@ import {
 import { acRequest } from "./client";
 import { useAgentControl } from "./provider";
 import type {
+  AcProjectCreate,
+  AcProjectListOut,
+  AcProjectOut,
+  AcProjectUpdate,
+  AcTaskAssign,
+  AcTaskCreate,
+  AcTaskListOut,
+  AcTaskOut,
+  AcTaskUpdate,
   AgentCreate,
   AgentHealthOut,
   AgentListOut,
@@ -140,6 +149,101 @@ export function useRunTimeline(id: string | null, cursor?: string): UseQueryResu
     queryFn: ({ signal }) =>
       acRequest<RunTimelineOut>(`/runs/${id}/timeline`, { query: { cursor }, signal }),
     enabled: !!id,
+  });
+}
+
+// --- Projets & tâches (P8) ----------------------------------------------------
+
+export function useProjects(
+  filters: Record<string, string | undefined> = {},
+): UseQueryResult<AcProjectListOut> {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["ac", tenant, "projects", filters],
+    queryFn: ({ signal }) => acRequest<AcProjectListOut>("/projects", { query: filters, signal }),
+  });
+}
+
+export function useProject(id: string | null): UseQueryResult<AcProjectOut> {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["ac", tenant, "project", id],
+    queryFn: ({ signal }) => acRequest<AcProjectOut>(`/projects/${id}`, { signal }),
+    enabled: !!id,
+  });
+}
+
+export function useProjectTasks(
+  projectId: string | null,
+  filters: Record<string, string | undefined> = {},
+): UseQueryResult<AcTaskListOut> {
+  const tenant = useTenantKey();
+  return useQuery({
+    queryKey: ["ac", tenant, "project", projectId, "tasks", filters],
+    queryFn: ({ signal }) =>
+      acRequest<AcTaskListOut>(`/projects/${projectId}/tasks`, { query: filters, signal }),
+    enabled: !!projectId,
+  });
+}
+
+export function useCreateProject() {
+  const qc = useQueryClient();
+  const tenant = useTenantKey();
+  return useMutation({
+    mutationFn: (body: AcProjectCreate) =>
+      acRequest<AcProjectOut>("/projects", { method: "POST", body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ac", tenant, "projects"] });
+    },
+  });
+}
+
+export function useUpdateProject(projectId: string) {
+  const qc = useQueryClient();
+  const tenant = useTenantKey();
+  return useMutation({
+    mutationFn: (body: AcProjectUpdate) =>
+      acRequest<AcProjectOut>(`/projects/${projectId}`, { method: "PATCH", body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ac", tenant, "project", projectId] });
+      void qc.invalidateQueries({ queryKey: ["ac", tenant, "projects"] });
+    },
+  });
+}
+
+export function useCreateTask(projectId: string) {
+  const qc = useQueryClient();
+  const tenant = useTenantKey();
+  return useMutation({
+    mutationFn: (body: AcTaskCreate) =>
+      acRequest<AcTaskOut>(`/projects/${projectId}/tasks`, { method: "POST", body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ac", tenant, "project", projectId, "tasks"] });
+    },
+  });
+}
+
+export function useUpdateTask(projectId: string, taskId: string) {
+  const qc = useQueryClient();
+  const tenant = useTenantKey();
+  return useMutation({
+    mutationFn: (body: AcTaskUpdate) =>
+      acRequest<AcTaskOut>(`/tasks/${taskId}`, { method: "PATCH", body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ac", tenant, "project", projectId, "tasks"] });
+    },
+  });
+}
+
+export function useAssignTask(projectId: string, taskId: string) {
+  const qc = useQueryClient();
+  const tenant = useTenantKey();
+  return useMutation({
+    mutationFn: (body: AcTaskAssign) =>
+      acRequest<AcTaskOut>(`/tasks/${taskId}/assign`, { method: "POST", body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ac", tenant, "project", projectId, "tasks"] });
+    },
   });
 }
 
