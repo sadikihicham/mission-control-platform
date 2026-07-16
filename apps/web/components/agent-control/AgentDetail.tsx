@@ -11,10 +11,14 @@ import {
   useCreateCredential,
 } from "@/lib/agent-control/hooks";
 import { useAgentControl } from "@/lib/agent-control/provider";
+import { useAcTopic } from "@/lib/agent-control/realtime";
 import { AcError, AcLoading } from "./States";
 
 export function AgentDetail({ agentId }: { agentId: string }) {
-  const { t, can } = useAgentControl();
+  const ac = useAgentControl();
+  const { t, can } = ac;
+  // Temps réel : souscrit au topic de cet agent le temps du détail (P9, gap 1).
+  useAcTopic(ac, agentId ? `agent:${agentId}` : null);
   const q = useAgent(agentId);
   const health = useAgentHealth(agentId);
   const lifecycle = useAgentLifecycle(agentId);

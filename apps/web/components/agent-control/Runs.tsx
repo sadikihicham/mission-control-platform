@@ -3,6 +3,7 @@
 // Écrans exécutions (SP5 §12) : liste paginée + détail avec timeline paginée.
 import { useRun, useRunTimeline, useRuns } from "@/lib/agent-control/hooks";
 import { useAgentControl } from "@/lib/agent-control/provider";
+import { useAcTopic } from "@/lib/agent-control/realtime";
 import { AcEmpty, AcError, AcLoading } from "./States";
 
 const RUN_TONE: Record<string, string> = {
@@ -50,7 +51,10 @@ export function Runs({ onOpen }: { onOpen: (id: string) => void }) {
 }
 
 export function RunDetail({ runId }: { runId: string }) {
-  const { t } = useAgentControl();
+  const ac = useAgentControl();
+  const { t } = ac;
+  // Temps réel : souscrit au topic de ce run le temps du détail (P9, gap 1).
+  useAcTopic(ac, runId ? `run:${runId}` : null);
   const q = useRun(runId);
   const tl = useRunTimeline(runId);
 

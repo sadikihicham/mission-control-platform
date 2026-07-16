@@ -47,6 +47,12 @@ function useTenantKey(): string {
   return useAgentControl().installationId ?? "local";
 }
 
+// Intervalle de repli : le temps réel V1 (WS `ac:events`) pilote désormais la
+// fraîcheur par invalidation ciblée (P9, gap 1). Le polling ne subsiste que comme
+// filet de sécurité si le WS est indisponible — d'où un intervalle allongé (vs
+// 15-20 s auparavant) pour ne pas doubler inutilement la charge quand le WS est up.
+const FALLBACK_REFETCH_MS = 60_000;
+
 // --- Dashboard / health -------------------------------------------------------
 
 export function useDashboard(): UseQueryResult<DashboardOut> {
@@ -54,7 +60,7 @@ export function useDashboard(): UseQueryResult<DashboardOut> {
   return useQuery({
     queryKey: ["ac", tenant, "dashboard"],
     queryFn: ({ signal }) => acRequest<DashboardOut>("/dashboard", { signal }),
-    refetchInterval: 15_000,
+    refetchInterval: FALLBACK_REFETCH_MS,
   });
 }
 
@@ -83,7 +89,7 @@ export function useAgentHealth(id: string | null): UseQueryResult<AgentHealthOut
     queryKey: ["ac", tenant, "agent", id, "health"],
     queryFn: ({ signal }) => acRequest<AgentHealthOut>(`/agents/${id}/health`, { signal }),
     enabled: !!id,
-    refetchInterval: 20_000,
+    refetchInterval: FALLBACK_REFETCH_MS,
   });
 }
 
@@ -255,7 +261,7 @@ export function useApprovals(status = "pending"): UseQueryResult<ApprovalListOut
     queryKey: ["ac", tenant, "approvals", status],
     queryFn: ({ signal }) =>
       acRequest<ApprovalListOut>("/approvals", { query: { status }, signal }),
-    refetchInterval: 20_000,
+    refetchInterval: FALLBACK_REFETCH_MS,
   });
 }
 
@@ -282,7 +288,7 @@ export function useAlerts(status?: string): UseQueryResult<AlertListOut> {
   return useQuery({
     queryKey: ["ac", tenant, "alerts", status ?? "all"],
     queryFn: ({ signal }) => acRequest<AlertListOut>("/alerts", { query: { status }, signal }),
-    refetchInterval: 20_000,
+    refetchInterval: FALLBACK_REFETCH_MS,
   });
 }
 
