@@ -270,3 +270,107 @@ def list_usage(
         last = rows[-1]
         next_cursor = _encode_cursor(last.occurred_at, last.id)
     return rows, next_cursor, has_more
+
+
+# --- Export CSV (streaming, tenant-scoped) ------------------------------------
+
+# Colonnes figées de l'export coûts (contrat V1 §8, capacité `view_costs`). Le
+# coût reste une **chaîne décimale** (précision monétaire), jamais un float.
+CSV_EXPORT_COLUMNS: tuple[str, ...] = (
+    "occurred_at",
+    "usage_id",
+    "agent_id",
+    "project_id",
+    "run_id",
+    "provider",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "calls",
+    "duration_ms",
+    "currency",
+    "cost",
+    "pricing_version",
+)
+
+# Borne de sécurité : jamais un export non borné qui épuiserait la mémoire/DB.
+# Au-delà, l'appelant doit filtrer (projet/agent) — même contrat que les listes.
+CSV_EXPORT_MAX_ROWS = 100_000
+
+
+def _csv_row(rec: AgentUsageRecord) -> tuple:
+    """Projette un enregistrement sur les colonnes figées de l'export."""
+    return (
+        rec.occurred_at.isoformat() if rec.occurred_at else "",
+        str(rec.id),
+        str(rec.agent_id) if rec.agent_id else "",
+        str(rec.project_id) if rec.project_id else "",
+        str(rec.run_id) if rec.run_id else "",
+        rec.provider or "",
+        rec.model or "",
+        rec.input_tokens,
+        rec.output_tokens,
+        rec.total_tokens,
+        rec.calls,
+        "" if rec.duration_ms is None else rec.duration_ms,
+        rec.currency,
+        str(rec.cost),  # Decimal → chaîne (jamais float)
+        rec.pricing_version,
+    )
+
+
+def collect_usage_csv_rows(
+    db: Session,
+    ctx: HostContext,
+    *,
+    project_id: str | None = None,
+    agent_id: str | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
+) -> list[tuple]:
+    """Matérialise (eager) les lignes de l'export, tenant-scoped et borné.
+
+    Toutes les requêtes sont filtrées par `installation_id` du contexte (ADR-0003) :
+    aucune fuite cross-tenant possible. La lecture est **faite ici**, tant que la
+    session est vivante et dans le fil d'exécution de la requête — jamais pendant
+    le streaming de la réponse (une itération DB paresseuse depuis le générateur de
+    `StreamingResponse` s'exécute dans un autre fil que la session et interbloque).
+    L'ordre est stable (`occurred_at DESC, id DESC`), identique à `/usage`.
+    """
+    stmt: Select = select(AgentUsageRecord).where(
+        AgentUsageRecord.installation_id == _tenant(ctx)
+    )
+    pid = _as_uuid(project_id)
+    if pid is not None:
+        stmt = stmt.where(AgentUsageRecord.project_id == pid)
+    aid = _as_uuid(agent_id)
+    if aid is not None:
+        stmt = stmt.where(AgentUsageRecord.agent_id == aid)
+    if since is not None:
+        stmt = stmt.where(AgentUsageRecord.occurred_at >= since)
+    if until is not None:
+        stmt = stmt.where(AgentUsageRecord.occurred_at < until)
+    stmt = stmt.order_by(
+        AgentUsageRecord.occurred_at.desc(), AgentUsageRecord.id.desc()
+    ).limit(CSV_EXPORT_MAX_ROWS)
+    return [_csv_row(rec) for rec in db.scalars(stmt)]
+
+
+def csv_lines(rows: list[tuple]):
+    """Générateur CSV **pur** (aucune I/O DB) : en-tête puis lignes déjà en mémoire.
+
+    Convient au streaming d'une `StreamingResponse` : le corps est produit sans
+    toucher la session, donc sans risque d'interblocage inter-fils.
+    """
+    import csv
+    import io
+
+    def _write(row: tuple) -> str:
+        buf = io.StringIO()
+        csv.writer(buf).writerow(row)
+        return buf.getvalue()
+
+    yield _write(CSV_EXPORT_COLUMNS)
+    for row in rows:
+        yield _write(row)
