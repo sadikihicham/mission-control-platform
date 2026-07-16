@@ -24,6 +24,8 @@ from apps.api.agent_control.ingest.schemas import (
     IngestHeartbeatResponse,
     IngestHeartbeatV1,
 )
+from apps.api.agent_control.operations import budgets as budgets_service
+from apps.api.agent_control.operations import usage as usage_service
 from apps.api.agent_control.runs import service as runs_service
 from apps.api.core.config import settings
 from apps.api.integrations.envelopes import EventEnvelopeV1
@@ -81,6 +83,43 @@ def _project_run(db: Session, agent: Agent, ev: EventEnvelopeV1, occurred: datet
             task_id_raw=ev.task_id,
             payload=ev.payload or {},
             occurred_at=occurred,
+        )
+
+
+def _project_usage(db: Session, agent: Agent, ev: EventEnvelopeV1, occurred: datetime) -> None:
+    """Projette un événement `usage.recorded` en consommation + évaluation budget.
+
+    L'agent rapporte tokens/appels/durée ; le **serveur** calcule le coût (Decimal,
+    grille versionnée) — jamais un coût reçu du client. Idempotent par
+    `(installation_id, event_id)` : rejouer le batch ne double pas la consommation.
+    À la première matérialisation, on évalue les budgets applicables DANS la même
+    transaction (alertes de seuil dédupliquées, événements outbox). Une erreur de
+    projection n'altère pas les compteurs d'ingest (audit ≠ sémantique coût).
+    """
+    payload = ev.payload or {}
+    _, created = usage_service.record_usage(
+        db,
+        installation_id=agent.installation_id,
+        agent_id=agent.id,
+        source_event_id=ev.event_id,
+        occurred_at=occurred,
+        project_id=ev.project_id,
+        run_id=ev.run_id,
+        provider=payload.get("provider"),
+        model=payload.get("model"),
+        input_tokens=payload.get("input_tokens", 0),
+        output_tokens=payload.get("output_tokens", 0),
+        calls=payload.get("calls", 1),
+        duration_ms=payload.get("duration_ms"),
+        pricing_version=payload.get("pricing_version"),
+    )
+    if created:
+        budgets_service.evaluate_budgets(
+            db,
+            agent.installation_id,
+            agent_id=agent.id,
+            project_id=ev.project_id,
+            at=occurred,
         )
 
 
@@ -185,6 +224,10 @@ def ingest_events(
         # les événements run.*/run.step.* alimentent agent_runs/agent_run_steps.
         # Non fatale : n'altère jamais accepted/rejected (audit ≠ sémantique run).
         _project_run(db, agent, ev, occurred)
+        # Projection des coûts (P6) DANS la même transaction : un événement
+        # `usage.recorded` alimente agent_usage_records puis évalue les budgets.
+        if ev.event_type == "usage.recorded":
+            _project_usage(db, agent, ev, occurred)
         last_seq = ev.sequence
         accepted += 1
 

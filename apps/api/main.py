@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 from apps.api.agent_control.control import agent_routes as agent_control_agent_cmd_router
 from apps.api.agent_control.control import routes as agent_control_control_router
 from apps.api.agent_control.ingest import routes as agent_control_ingest_router
+from apps.api.agent_control.operations import routes as agent_control_operations_router
 from apps.api.agent_control.runs import routes as agent_control_runs_router
 from apps.api.core.config import settings
 from apps.api.integrations.envelopes import ErrorBody, ErrorEnvelope
@@ -95,3 +96,6 @@ app.include_router(agent_control_control_router.router)
 # Agent Control V1 — file de commandes côté agent (récupération long poll, ACK,
 # résultat). Authentifié par credential agent (scope `commands`), hors RBAC user.
 app.include_router(agent_control_agent_cmd_router.router)
+# Agent Control V1 — plan opérationnel (P6) : usage/coûts, budgets, alertes et
+# audit append-only redacted. JWT hôte + capacité (view_costs/operate/view).
+app.include_router(agent_control_operations_router.router)

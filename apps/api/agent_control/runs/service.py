@@ -33,6 +33,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Select, select, tuple_
 from sqlalchemy.orm import Session, selectinload
 
+from apps.api.agent_control.operations import redaction
 from apps.api.integrations.errors import ResourceNotFound, StateConflict
 from apps.api.integrations.host_context import HostContext
 from apps.api.integrations.state_machines import RUN_TRANSITIONS, RunState, can_transition
@@ -64,18 +65,9 @@ STEP_STATE_BY_EVENT: dict[str, str] = {
     "run.step.failed": "failed",
 }
 
-# Clés de payload masquées dans la timeline (redaction P4, conservatrice).
-_REDACT_KEY_MARKERS: tuple[str, ...] = (
-    "secret",
-    "token",
-    "password",
-    "api_key",
-    "apikey",
-    "authorization",
-    "credential",
-    "prompt",
-    "raw",
-)
+# Redaction : la timeline P4 réutilise désormais la redaction centralisée P6
+# (`operations.redaction`), source unique du masquage — voir `redact_payload`.
+_REDACT_KEY_MARKERS = redaction.SENSITIVE_KEY_MARKERS
 
 
 def _now() -> datetime:
@@ -500,19 +492,10 @@ def run_timeline(
 
 
 def redact_payload(payload: dict) -> dict:
-    """Masque les clés sensibles d'un payload de timeline (redaction P4).
+    """Masque les données sensibles d'un payload de timeline (redaction centralisée).
 
-    Conservateur : toute clé dont le nom contient un marqueur sensible
-    (`secret`, `token`, `prompt`, `raw`, …) est remplacée par `"[redacted]"`.
-    P6 durcira (redaction structurée, PII). Ne mute jamais l'original.
+    Délègue à `operations.redaction` (source unique, P6) : masquage par nom de clé
+    sensible ET par valeur ressemblant à un secret, récursif sur dicts et listes.
+    Ne mute jamais l'original. Le sentinel reste `"[redacted]"`.
     """
-    out: dict = {}
-    for key, value in payload.items():
-        lowered = str(key).lower()
-        if any(marker in lowered for marker in _REDACT_KEY_MARKERS):
-            out[key] = "[redacted]"
-        elif isinstance(value, dict):
-            out[key] = redact_payload(value)
-        else:
-            out[key] = value
-    return out
+    return redaction.redact_dict(payload)

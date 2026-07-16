@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.agent_control.control.commands import _command_topic, _emit, transition_command
 from apps.api.agent_control.control.schemas import ApprovalDecisionIn
+from apps.api.agent_control.operations import audit as audit_service
 from apps.api.agent_control.runs import service as runs_service
 from apps.api.integrations.errors import ResourceNotFound, StateConflict
 from apps.api.integrations.host_context import HostContext
@@ -202,6 +203,19 @@ def _decide(
         payload={
             "approval_id": str(approval.id),
             "decision_by": str(decided_by) if decided_by else None,
+        },
+    )
+    # Audit append-only redacted de la décision d'approbation (qui/quoi/résultat).
+    audit_service.audit_from_context(
+        db,
+        ctx,
+        action=event_type,  # approval.approved | approval.rejected
+        target_type="approval",
+        target_id=str(approval.id),
+        after={
+            "status": target.value,
+            "action_type": approval.action_type,
+            "comment": body.comment,
         },
     )
     db.commit()
