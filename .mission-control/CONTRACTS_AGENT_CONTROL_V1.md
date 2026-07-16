@@ -183,7 +183,7 @@ Base : `/agent-control/v1`. Liste complète et capacité associée : §5 + `ROUT
 **Pagination par curseur** (toutes les listes) — `PageInfo` :
 
 - requête : `?cursor=<opaque>&limit=<1..200, défaut 50>` + filtres bornés (voir ci-dessous) ;
-- réponse : `{ "items": [...], "page": { "next_cursor": str|null, "limit": int, "has_more": bool } }` ;
+- réponse : `{ "items": [...], "page_info": { "next_cursor": str|null, "limit": int, "has_more": bool } }` ;
 - **ordre stable** obligatoire ; `next_cursor` opaque (base64url) encode la dernière clé de tri ; le client ne fabrique jamais de curseur ;
 - clés de tri par collection : listes temporelles (runs, events/timeline, audit, usage, alerts) = `(occurred_at|created_at DESC, id DESC)` ; registres (agents, projects, tasks, policies, budgets) = `(created_at DESC, id DESC)` ; timeline = `(sequence ASC)`.
 

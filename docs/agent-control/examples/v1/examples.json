@@ -18,7 +18,7 @@
 
   "paginated_list": {
     "items": [],
-    "page": { "next_cursor": null, "limit": 50, "has_more": false }
+    "page_info": { "next_cursor": null, "limit": 50, "has_more": false }
   },
 
   "context_response": {
