@@ -1,0 +1,4 @@
+# Playwright (P9, gap 3)
+/test-results/
+/playwright-report/
+/playwright/.cache/
