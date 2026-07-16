@@ -26,7 +26,16 @@ function createEngine(): Engine | null {
   if (!AC) return null;
 
   const ctx = new AC();
-  void ctx.resume(); // le clic du toggle compte comme geste utilisateur
+  // Le clic du toggle compte comme geste utilisateur — sauf si `enabled` vient d'être
+  // réhydraté depuis localStorage au montage (rechargement de page, pas de clic réel) :
+  // les navigateurs (surtout Safari) laissent alors le contexte `suspended`. On retente
+  // au premier vrai geste utilisateur plutôt que de rester silencieux indéfiniment.
+  const retryResumeOnGesture = () => {
+    if (ctx.state !== "running") void ctx.resume().catch(() => {});
+  };
+  const gestureEvents = ["pointerdown", "keydown"] as const;
+  gestureEvents.forEach((ev) => window.addEventListener(ev, retryResumeOnGesture));
+  void ctx.resume().catch(() => {});
 
   const master = ctx.createGain();
   master.gain.value = 0;
@@ -87,6 +96,7 @@ function createEngine(): Engine | null {
   }, 80);
 
   const dispose = () => {
+    gestureEvents.forEach((ev) => window.removeEventListener(ev, retryResumeOnGesture));
     window.clearInterval(timer);
     try { bed.stop(); } catch { /* déjà arrêté */ }
     master.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
