@@ -361,7 +361,9 @@ def update_budget(
             "version de budget périmée (édition concurrente)",
             details={"expected": body.version, "current": budget.version},
         )
-    _validate(body.scope_type, body.period, body.on_exceed, body.thresholds)
+    # La portée d'un budget ne change pas après création (BudgetUpdate n'expose pas
+    # scope_type/scope_id) — on ne valide que période/comportement/seuils.
+    _validate(None, body.period, body.on_exceed, body.thresholds)
     before = {
         "amount_limit": str(budget.amount_limit),
         "on_exceed": budget.on_exceed,
