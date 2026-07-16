@@ -6,6 +6,97 @@
 // -----------------------------------------------------------------------------
 
 
+export interface AcProjectCreate {
+  name: string;
+  description: string | null;
+  slug: string | null;
+  status: string | null;
+  repo: string | null;
+}
+
+
+export interface AcProjectListOut {
+  items: AcProjectOut[];
+  page_info: PageInfo;
+}
+
+
+export interface AcProjectOut {
+  id: string;
+  installation_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  status: string;
+  progress: number;
+  repo: string | null;
+  is_seed: boolean;
+  task_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+
+export interface AcProjectUpdate {
+  name: string | null;
+  description: string | null;
+  status: string | null;
+  progress: number | null;
+  repo: string | null;
+}
+
+
+export interface AcTaskAssign {
+  agent_id: string | null;
+  agent_key: string | null;
+}
+
+
+export interface AcTaskCreate {
+  title: string;
+  code: string | null;
+  module: string | null;
+  parent_id: string | null;
+  agent_key: string | null;
+  status: string | null;
+  position: number | null;
+}
+
+
+export interface AcTaskListOut {
+  items: AcTaskOut[];
+  page_info: PageInfo;
+}
+
+
+export interface AcTaskOut {
+  id: string;
+  installation_id: string;
+  project_id: string;
+  parent_id: string | null;
+  agent_id: string | null;
+  code: string | null;
+  title: string;
+  module: string | null;
+  status: string;
+  progress: number;
+  position: number;
+  agent_key: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+
+export interface AcTaskUpdate {
+  title: string | null;
+  module: string | null;
+  status: string | null;
+  progress: number | null;
+  position: number | null;
+  agent_key: string | null;
+}
+
+
 export interface ActivityOut {
   type: string;
   state: string | null;
