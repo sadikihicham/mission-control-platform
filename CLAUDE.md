@@ -46,6 +46,12 @@ ruff check apps          # Python (config in pyproject.toml: E,F,I,UP,B; line-le
 cd apps/web && npm run lint && npm run build   # web (next lint + build)
 ```
 
+**E2E (Agent Control, isolated stack):**
+```bash
+cd apps/web && npm run test:e2e   # Playwright + axe-core; see apps/web/e2e/README.md for one-time
+                                   # setup (ports 8009/3200, separate mc_e2e DB/Redis — never the shared dev stack)
+```
+
 **Migrations (Alembic):**
 ```bash
 alembic upgrade head                              # from repo root (prepend_sys_path=., script_location=infra/migrations)
@@ -63,9 +69,9 @@ PYTHONPATH=apps/agent-cli python3 -m mc_platform working "task desc" 45 3 7   # 
 ### Backend — `apps/api/` (FastAPI, SQLAlchemy 2, Pydantic v2)
 
 - **`main.py`** — app + lifespan + `GET /health`. On startup it launches three background asyncio tasks (in `realtime/ws.py`): a Redis subscriber, a stale-agent scanner (sweeps every 15s, flips silent `working` agents to `stale`), and an mc-file watcher (polls `MC_STATUS_DIR` every 2s).
-- **`core/`** — `config.py` (pydantic-settings, env-driven; defaults match Docker), `db.py` (**lazy** engine/session — importing models never opens a connection), `redis.py` (sync `publish_event` for ingest, async client for the realtime subscriber), `security.py` (bcrypt + JWT HS256 + reset-token hashing), `roles.py` (RBAC hierarchy `viewer<developer<pm<cto<admin`).
+- **`core/`** — `config.py` (pydantic-settings, env-driven; defaults match Docker), `db.py` (**lazy** engine/session — importing models never opens a connection), `redis.py` (sync `publish_event` for ingest, async client for the realtime subscriber), `security.py` (bcrypt + JWT HS256 + reset-token hashing), `roles.py` (RBAC hierarchy `viewer<developer<pm<cto<admin`), `ratelimit.py` (`check_and_increment`, a Redis fixed-window counter, fail-open on Redis error).
 - **`models/`** — `tables.py` (User, Project, Agent, Task, ActivityLog, PasswordResetToken), `enums.py`. Import via `from apps.api.models import User, Project, Agent, ...`. `User.full_name`/`User.civility` (migration `0004`) drive the gendered welcome message in the UI.
-- **`routers/`** — `auth.py` (login, forgot/reset-password, `get_current_user`, `require_role(min)` factory, `/auth/me`, `/auth/users` [admin-only]), `agents.py` (`/agents`, `/stats/dashboard`, `/agents/{key}/activity`), `projects.py` (read for viewer, CRUD for pm+, plus `/projects/{id}/git`), `heartbeat.py` (the ingest endpoint). `/stats/dashboard` returns `DashboardStats`: `agents_total`, `agents_active`, `agents_blocked`, `agents_stale`, `agents_done`, `agents_error`, `overall_progress`.
+- **`routers/`** — `auth.py` (login, forgot/reset-password, `/auth/change-password`, `get_current_user`, `require_role(min)` factory, `/auth/me`, `/auth/users` [admin-only, GET/POST/PATCH]), `agents.py` (`/agents`, `/stats/dashboard`, `/agents/{key}/activity`, `/agents/{key}/revoke-token`), `projects.py` (read for viewer, CRUD for pm+, plus `/projects/{id}/git`), `heartbeat.py` (the ingest endpoint). `/stats/dashboard` returns `DashboardStats`: `agents_total`, `agents_active`, `agents_blocked`, `agents_stale`, `agents_done`, `agents_error`, `overall_progress`.
 - **`services/`** — business logic kept out of routers: `agents_db.py`, `projects.py`, `mc_sync.py` (file→DB sync), `events.py` (`publish_stats`), `git.py` (GitHub API with in-memory TTL cache), `project_seed.py` (static project→task→subtask→agent fixtures from the MVP orchestration, slated to be replaced by live DB data).
 - **`schemas/`** — Pydantic DTOs (→ OpenAPI → intended source for `packages/contracts` TS types).
 
@@ -73,7 +79,7 @@ PYTHONPATH=apps/agent-cli python3 -m mc_platform working "task desc" 45 3 7   # 
 
 **Realtime flow (Contract E).** Ingest/sync write to Postgres, then `publish_event(...)` to the Redis `mc:events` channel (sync, non-blocking — a dead Redis never fails an ingest). The async subscriber in `ws.py` fans every message out to connected `/ws` clients. Event types: `agent.update`, `agent.stale`, `stats.update`, `refresh`. The `/ws?token=<JWT>` endpoint validates the JWT then ignores client messages (keepalive only).
 
-**Auth specifics.** `state="stale"` is **server-derived** (silence > `MC_STALE_SECONDS`, default 30s) and is rejected by the ingest endpoint. The heartbeat endpoint is **not** JWT-protected — it uses a shared secret in the `X-MC-Token` header (`MC_INGEST_TOKEN`). Everything else requires a Bearer JWT. `forgot-password` is anti-enumeration (identical response regardless of email existence) and, outside production, returns the raw reset token in `dev_token` since there's no SMTP.
+**Auth specifics.** `state="stale"` is **server-derived** (silence > `MC_STALE_SECONDS`, default 30s) and is rejected by the ingest endpoint. The heartbeat endpoint is **not** JWT-protected — it uses a shared secret in the `X-MC-Token` header (`MC_INGEST_TOKEN`). Everything else requires a Bearer JWT. `forgot-password` is anti-enumeration (identical response regardless of email existence) and, outside production, returns the raw reset token in `dev_token` since there's no SMTP. `/auth/login` and `/auth/change-password` are rate-limited (10 attempts/600s, keyed separately by IP and by email/user) but **only when `settings.environment` starts with `"prod"`** — a no-op in local dev — and **fail open** if Redis is unreachable (same philosophy as `publish_event`). Client-IP resolution only trusts `X-Forwarded-For` from proxies listed in `settings.trusted_proxies` (env `TRUSTED_PROXIES`, a JSON list of IPs or DNS-resolvable names, e.g. `["caddy"]`).
 
 ### Agent Control — embeddable V1 module (`apps/api/agent_control/` + `apps/web/app/agent-control/`)
 
@@ -98,7 +104,8 @@ A second bounded context, built later as its own phased chantier (gates P0→P9,
 - **`lib/i18n.tsx`** — trilingual (fr/en/ar, default fr); UI strings live here.
 - **`lib/contracts.ts`** — TS types generated from the API's OpenAPI (see `packages/contracts/` below); `lib/api.ts` re-exports DTOs from here instead of hand-duplicating them.
 - **`lib/mc.ts`** — pure UI helpers shared across views: status→display mapping, health counts, completion-color gradients, and formatters (`fmtAge`, `monogram`). No data, no I/O.
-- **`components/mc/`** — view components (Overview, Projects, Depts, Hierarchy, `HierarchyFlow`, Audit, Cost, Sentinel, Command palette, etc.).
+- **`lib/mc-sound.ts`** — procedural Web Audio ambient sound tied to agent activity state (the "ants at work" theme), with autoplay-unlock handling for browser audio policies.
+- **`components/mc/`** — view components (Overview, Projects, Depts, Hierarchy, `HierarchyFlow`, Audit, Cost, Sentinel, Command palette, etc.), plus `ChangePasswordModal.tsx` for the self-service `/auth/change-password` flow.
 
 ### Other
 
