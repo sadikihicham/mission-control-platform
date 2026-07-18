@@ -34,6 +34,7 @@ from jose import JWTError
 from sqlalchemy import select
 
 from apps.api.core.agent_control_deps import _build_adapter
+from apps.api.core.config import settings
 from apps.api.core.db import get_sessionmaker
 from apps.api.core.redis import AC_EVENTS_CHANNEL, get_async_redis
 from apps.api.core.security import decode_token
@@ -117,16 +118,23 @@ def _resolve_ws_context(token: str, installation_id: str | None) -> HostContext:
     Vérifie ensuite que l'`installation_id` demandé (query) correspond bien à
     l'installation résolue serveur — jamais l'inverse (le query ne choisit pas le
     tenant, il ne peut que le confirmer). Toute incohérence → refus.
+
+    Mode `jwt` (ADR-0010) : le jeton est celui de l'hôte, décodé par
+    l'adaptateur lui-même — pas avec le JWT V0 de ce service (`decode_token`),
+    qui ne s'applique qu'au mode `local` par défaut ci-dessous.
     """
-    payload = decode_token(token)  # peut lever JWTError
-    user_id = uuid.UUID(str(payload["sub"]))
     session_factory = get_sessionmaker()
     with session_factory() as db:
-        user = db.get(User, user_id)
-        # Un `user` absent/inactif fait lever `IdentityUnresolved` (fail-closed)
-        # par l'adaptateur — inutile de dupliquer le contrôle ici.
         adapter = _build_adapter(db)
-        ctx = adapter.build_context(user, request_id=str(uuid.uuid4()))
+        if settings.mc_host_adapter == "jwt":
+            credential = token
+        else:
+            payload = decode_token(token)  # peut lever JWTError
+            user_id = uuid.UUID(str(payload["sub"]))
+            credential = db.get(User, user_id)
+            # Un `user` absent/inactif fait lever `IdentityUnresolved`
+            # (fail-closed) par l'adaptateur — inutile de dupliquer le contrôle.
+        ctx = adapter.build_context(credential, request_id=str(uuid.uuid4()))
     # Le tenant est résolu serveur ; le query ne sert qu'à confirmer (ADR-0003).
     if installation_id and installation_id != ctx.installation.id:
         raise PermissionError("installation_id ne correspond pas au tenant résolu")

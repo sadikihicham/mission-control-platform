@@ -28,9 +28,17 @@ class Settings(BaseSettings):
 
     # Agent Control V1 — sélection de l'adaptateur hôte (ADR-0001, contrat V1 §13).
     # `local` = mode embarqué/autonome résolu contre le registre DB (mc_installations
-    # / mc_user_mappings). Un futur adaptateur `jwt` d'un hôte réel s'y ajoutera sans
-    # toucher au domaine. Surchargeable via l'env MC_HOST_ADAPTER.
+    # / mc_user_mappings). `jwt` = hôte réel (ADR-0010, ex. SGI) dont le JWT est
+    # validé directement, sans passer par le JWT/les utilisateurs V0 de ce service.
+    # Surchargeable via l'env MC_HOST_ADAPTER.
     mc_host_adapter: str = "local"
+
+    # Adaptateur `jwt` (ADR-0010) : secret partagé avec la plateforme hôte pour
+    # valider SES JWT (HS256, claims `sub`/`company_id`/`role`). Distinct de
+    # `jwt_secret` ci-dessus, qui signe les JWT propres à ce service (V0).
+    # Surchargeable via SGI_JWT_SECRET / SGI_JWT_ALGORITHM.
+    sgi_jwt_secret: str = "dev-insecure-change-me"
+    sgi_jwt_algorithm: str = "HS256"
 
     # Ingest V1 (contrat V1 §8) : taille maximale d'un batch d'événements accepté
     # par POST /agent-control/v1/ingest/events. Au-delà → validation_error (422).
