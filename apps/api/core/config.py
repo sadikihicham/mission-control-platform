@@ -4,7 +4,29 @@ Noms d'env figés dans .mission-control/CONTRACTS.md (décisions verrouillées).
 """
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Valeur par défaut des secrets partagés avec l'hôte SGI — publiquement lisible dans ce dépôt, donc
+# elle n'authentifie personne. Sert de sentinelle aux gardes fail-closed (ADR-0010/0011).
+SECRET_DEV_DEFAUT = "dev-insecure-change-me"
+# Environnements où le défaut ci-dessus reste acceptable. Tout ce qui n'est PAS dans cette liste
+# (`prod`, `staging`, `preprod`, ou une faute de frappe) est traité comme non-dev : la garde se
+# resserre sur l'inconnu au lieu de se relâcher.
+_ENVS_DEV = frozenset({"development", "dev", "test", "testing", "local"})
+
+
+def _secret_absent(valeur: str) -> bool:
+    """Un secret n'est réellement posé que s'il reste quelque chose après `strip()` ET que ce reste
+    n'est pas la sentinelle du dépôt.
+
+    Comparer la valeur BRUTE laisserait passer `dev-insecure-change-me\\n` : les fichiers `.env` et
+    l'interpolation compose préservent espaces et sauts de ligne, donc un opérateur qui recopie la
+    valeur par défaut obtient un secret « différent » de la sentinelle — et la garde s'ouvre sur
+    exactement le scénario qu'elle existe pour fermer. Seule la DÉCISION est prise sur la valeur
+    strippée ; la clé HMAC réelle reste la valeur brute, on ne réécrit pas le secret."""
+    v = valeur.strip()
+    return not v or v == SECRET_DEV_DEFAUT
 
 
 class Settings(BaseSettings):
@@ -37,7 +59,7 @@ class Settings(BaseSettings):
     # valider SES JWT (HS256, claims `sub`/`company_id`/`role`). Distinct de
     # `jwt_secret` ci-dessus, qui signe les JWT propres à ce service (V0).
     # Surchargeable via SGI_JWT_SECRET / SGI_JWT_ALGORITHM.
-    sgi_jwt_secret: str = "dev-insecure-change-me"
+    sgi_jwt_secret: str = SECRET_DEV_DEFAUT
     sgi_jwt_algorithm: str = "HS256"
 
     # Pont d'activation par tenant (ADR-0011) : secret partagé HMAC pour vérifier
@@ -45,7 +67,50 @@ class Settings(BaseSettings):
     # `mc_installations.status`). Distinct de sgi_jwt_secret (identité utilisateur)
     # — celui-ci authentifie un appel machine-à-machine, jamais un utilisateur.
     # Surchargeable via SGI_WEBHOOK_SECRET.
-    sgi_webhook_secret: str = "dev-insecure-change-me"
+    sgi_webhook_secret: str = SECRET_DEV_DEFAUT
+
+    @property
+    def est_environnement_dev(self) -> bool:
+        """Vrai seulement pour un environnement de développement/test RECONNU. Un nom inconnu
+        (faute de frappe incluse) compte comme non-dev : les gardes se resserrent sur l'inconnu."""
+        return self.environment.strip().lower() in _ENVS_DEV
+
+    @property
+    def pont_sgi_configure(self) -> bool:
+        """Le webhook entrant SGI (ADR-0011) est-il réellement authentifiable ?
+
+        Sa route est montée SANS CONDITION (`main.py`) et n'a pas d'autre authentification que ce
+        secret partagé. Tant qu'il porte la valeur du dépôt, quiconque la connaît peut forger une
+        signature valide et suspendre un tenant — d'où la désactivation de la route hors dev."""
+        return not _secret_absent(self.sgi_webhook_secret)
+
+    @model_validator(mode="after")
+    def _exige_le_secret_jwt_si_adaptateur_jwt(self) -> "Settings":
+        """Refus au DÉMARRAGE si l'adaptateur hôte JWT est activé hors dev sans son secret.
+
+        Contrairement au webhook (route désactivable), `MC_HOST_ADAPTER=jwt` est un choix explicite
+        de l'opérateur : démarrer quand même signifierait accepter des JWT signés avec un secret
+        public, donc laisser forger `role:admin` sur n'importe quel `company_id`. Il n'y a pas de
+        mode dégradé acceptable — on refuse de démarrer.
+
+        Le webhook, lui, n'est PAS traité ici : c'est une intégration optionnelle, bloquer tout le
+        cockpit pour elle serait disproportionné (cf. `pont_sgi_configure`)."""
+        # VIDE compte comme non posé, au même titre que le défaut : le compose de prod injecte
+        # `${SGI_JWT_SECRET:-}` (chaîne vide quand l'opérateur n'a rien défini), et ne tester que
+        # l'égalité au défaut laisserait passer ce cas — le plus probable en pratique.
+        secret_absent = _secret_absent(self.sgi_jwt_secret)
+        if (
+            self.mc_host_adapter.strip().lower() == "jwt"
+            and not self.est_environnement_dev
+            and secret_absent
+        ):
+            raise ValueError(
+                f"MC_HOST_ADAPTER=jwt en environnement '{self.environment}' sans SGI_JWT_SECRET "
+                "réel (absent ou resté au défaut du dépôt) : n'importe qui pourrait forger un JWT "
+                "hôte (role:admin, company_id arbitraire). Définis SGI_JWT_SECRET — la MÊME valeur "
+                "que le JWT_SECRET de la plateforme hôte SGI."
+            )
+        return self
 
     # Ingest V1 (contrat V1 §8) : taille maximale d'un batch d'événements accepté
     # par POST /agent-control/v1/ingest/events. Au-delà → validation_error (422).

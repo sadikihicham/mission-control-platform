@@ -9,6 +9,7 @@ import uuid
 
 import pytest
 from jose import jwt as jose_jwt
+from pydantic import ValidationError
 
 from apps.api.core.config import settings
 from apps.api.integrations.capabilities import Capability
@@ -153,3 +154,64 @@ def test_sgi_agent_role_maps_to_operate_not_manage(db):
 
     assert Capability.operate in ctx.capabilities
     assert Capability.manage_agents not in ctx.capabilities
+
+
+# --- Garde fail-closed au démarrage (audit 2026-07-19) -----------------------------------------
+# `MC_HOST_ADAPTER=jwt` hors dev sans `SGI_JWT_SECRET` posé signifierait accepter des JWT signés
+# avec un secret publiquement lisible dans ce dépôt : forge de `role:admin` sur n'importe quel
+# `company_id`. Aucun mode dégradé acceptable ⇒ refus de démarrer (contrairement au webhook, dont
+# seule la route se désactive).
+
+
+def _settings(**surcharges):
+    from apps.api.core.config import Settings
+
+    return Settings(**surcharges)
+
+
+def test_adaptateur_jwt_hors_dev_sans_secret_refuse_de_demarrer():
+    from apps.api.core.config import SECRET_DEV_DEFAUT
+
+    with pytest.raises(ValidationError):
+        _settings(environment="prod", mc_host_adapter="jwt", sgi_jwt_secret=SECRET_DEV_DEFAUT)
+
+
+def test_adaptateur_jwt_hors_dev_secret_vide_refuse_de_demarrer():
+    # Cas le PLUS probable en pratique : le compose prod injecte `${SGI_JWT_SECRET:-}`, donc une
+    # chaîne VIDE quand l'opérateur n'a rien posé. Ne tester que l'égalité au défaut le raterait.
+    with pytest.raises(ValidationError):
+        _settings(environment="prod", mc_host_adapter="jwt", sgi_jwt_secret="")
+    with pytest.raises(ValidationError):
+        _settings(environment="prod", mc_host_adapter="jwt", sgi_jwt_secret="   ")
+
+
+def test_adaptateur_jwt_hors_dev_avec_secret_demarre():
+    s = _settings(environment="prod", mc_host_adapter="jwt", sgi_jwt_secret="un-vrai-secret-hote")
+    assert s.mc_host_adapter == "jwt"
+
+
+def test_adaptateur_local_hors_dev_sans_secret_demarre():
+    # Non-régression : le déploiement actuel tourne en `local` et n'utilise PAS ce secret —
+    # l'exiger bloquerait un déploiement qui n'a rien demandé.
+    from apps.api.core.config import SECRET_DEV_DEFAUT
+
+    s = _settings(environment="prod", mc_host_adapter="local", sgi_jwt_secret=SECRET_DEV_DEFAUT)
+    assert s.mc_host_adapter == "local"
+
+
+def test_adaptateur_jwt_en_dev_sans_secret_demarre():
+    from apps.api.core.config import SECRET_DEV_DEFAUT
+
+    s = _settings(environment="development", mc_host_adapter="jwt", sgi_jwt_secret=SECRET_DEV_DEFAUT)
+    assert s.mc_host_adapter == "jwt"
+
+
+def test_adaptateur_jwt_defaut_avec_espaces_parasites_refuse_de_demarrer():
+    """F1 (audit adverse) : idem côté JWT. Le validator strippait pour tester le vide mais PAS pour
+    comparer au défaut — `dev-insecure-change-me\\n` démarrait donc sur un secret public."""
+    from apps.api.core.config import SECRET_DEV_DEFAUT
+
+    for valeur in (SECRET_DEV_DEFAUT + "\n", SECRET_DEV_DEFAUT + " ", " " + SECRET_DEV_DEFAUT):
+        with pytest.raises(ValidationError):
+            _settings(environment="prod", mc_host_adapter="jwt", sgi_jwt_secret=valeur)
+

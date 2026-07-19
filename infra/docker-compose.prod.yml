@@ -22,6 +22,20 @@ services:
       DATABASE_URL: postgresql+psycopg://mc:${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}@postgres:5432/mission_control
       JWT_SECRET: ${JWT_SECRET:?definir JWT_SECRET}
       MC_INGEST_TOKEN: ${MC_INGEST_TOKEN:?definir MC_INGEST_TOKEN}
+      # --- Pont avec la plateforme hôte SGI (ADR-0010 / ADR-0011) ---
+      # Secret HMAC du webhook entrant `POST /integrations/sgi/subscription-events` (bascule
+      # `mc_installations.status`). La route est montée SANS CONDITION : laissé au défaut du dépôt,
+      # quiconque connaît un `company_id` pourrait suspendre le tenant correspondant. Non défini ⇒
+      # la route se DÉSACTIVE (503) hors dev — fail-closed, le reste du cockpit continue de tourner.
+      # DOIT être identique au `SGI_WEBHOOK_SECRET` posé côté SGI, sinon signature rejetée en 401.
+      SGI_WEBHOOK_SECRET: ${SGI_WEBHOOK_SECRET:-}
+      # Adaptateur d'identité hôte : `local` (défaut, utilisateurs V0 de ce service) ou `jwt` (valide
+      # directement les JWT SGI, ADR-0010). Ne bascule sur `jwt` QUE si SGI_JWT_SECRET est posé —
+      # sinon l'API REFUSE de démarrer (forge de `role:admin` possible avec le secret public).
+      MC_HOST_ADAPTER: ${MC_HOST_ADAPTER:-local}
+      # Secret de signature des JWT de l'hôte SGI = le `JWT_SECRET` de SGI, pas celui de ce service.
+      # Inutile tant que MC_HOST_ADAPTER=local.
+      SGI_JWT_SECRET: ${SGI_JWT_SECRET:-}
       # Frontend et API sont 2 origines différentes en prod (ag. vs api.ag.) : sans ça, le
       # navigateur bloque tous les appels API du frontend réel (CORSMiddleware, apps/api/main.py).
       CORS_ORIGINS: '["https://ag.infinityauh.com"]'
