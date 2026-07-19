@@ -16,6 +16,19 @@ SECRET_DEV_DEFAUT = "dev-insecure-change-me"
 _ENVS_DEV = frozenset({"development", "dev", "test", "testing", "local"})
 
 
+def _secret_absent(valeur: str) -> bool:
+    """Un secret n'est réellement posé que s'il reste quelque chose après `strip()` ET que ce reste
+    n'est pas la sentinelle du dépôt.
+
+    Comparer la valeur BRUTE laisserait passer `dev-insecure-change-me\\n` : les fichiers `.env` et
+    l'interpolation compose préservent espaces et sauts de ligne, donc un opérateur qui recopie la
+    valeur par défaut obtient un secret « différent » de la sentinelle — et la garde s'ouvre sur
+    exactement le scénario qu'elle existe pour fermer. Seule la DÉCISION est prise sur la valeur
+    strippée ; la clé HMAC réelle reste la valeur brute, on ne réécrit pas le secret."""
+    v = valeur.strip()
+    return not v or v == SECRET_DEV_DEFAUT
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -46,7 +59,7 @@ class Settings(BaseSettings):
     # valider SES JWT (HS256, claims `sub`/`company_id`/`role`). Distinct de
     # `jwt_secret` ci-dessus, qui signe les JWT propres à ce service (V0).
     # Surchargeable via SGI_JWT_SECRET / SGI_JWT_ALGORITHM.
-    sgi_jwt_secret: str = "dev-insecure-change-me"
+    sgi_jwt_secret: str = SECRET_DEV_DEFAUT
     sgi_jwt_algorithm: str = "HS256"
 
     # Pont d'activation par tenant (ADR-0011) : secret partagé HMAC pour vérifier
@@ -69,7 +82,7 @@ class Settings(BaseSettings):
         Sa route est montée SANS CONDITION (`main.py`) et n'a pas d'autre authentification que ce
         secret partagé. Tant qu'il porte la valeur du dépôt, quiconque la connaît peut forger une
         signature valide et suspendre un tenant — d'où la désactivation de la route hors dev."""
-        return bool(self.sgi_webhook_secret) and self.sgi_webhook_secret != SECRET_DEV_DEFAUT
+        return not _secret_absent(self.sgi_webhook_secret)
 
     @model_validator(mode="after")
     def _exige_le_secret_jwt_si_adaptateur_jwt(self) -> "Settings":
@@ -85,9 +98,7 @@ class Settings(BaseSettings):
         # VIDE compte comme non posé, au même titre que le défaut : le compose de prod injecte
         # `${SGI_JWT_SECRET:-}` (chaîne vide quand l'opérateur n'a rien défini), et ne tester que
         # l'égalité au défaut laisserait passer ce cas — le plus probable en pratique.
-        secret_absent = (
-            not self.sgi_jwt_secret.strip() or self.sgi_jwt_secret == SECRET_DEV_DEFAUT
-        )
+        secret_absent = _secret_absent(self.sgi_jwt_secret)
         if (
             self.mc_host_adapter.strip().lower() == "jwt"
             and not self.est_environnement_dev

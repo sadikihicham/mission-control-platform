@@ -204,3 +204,14 @@ def test_adaptateur_jwt_en_dev_sans_secret_demarre():
 
     s = _settings(environment="development", mc_host_adapter="jwt", sgi_jwt_secret=SECRET_DEV_DEFAUT)
     assert s.mc_host_adapter == "jwt"
+
+
+def test_adaptateur_jwt_defaut_avec_espaces_parasites_refuse_de_demarrer():
+    """F1 (audit adverse) : idem côté JWT. Le validator strippait pour tester le vide mais PAS pour
+    comparer au défaut — `dev-insecure-change-me\\n` démarrait donc sur un secret public."""
+    from apps.api.core.config import SECRET_DEV_DEFAUT
+
+    for valeur in (SECRET_DEV_DEFAUT + "\n", SECRET_DEV_DEFAUT + " ", " " + SECRET_DEV_DEFAUT):
+        with pytest.raises(ValidationError):
+            _settings(environment="prod", mc_host_adapter="jwt", sgi_jwt_secret=valeur)
+

@@ -34,7 +34,11 @@ echo       "POSTGRES_PASSWORD=$(openssl rand -hex 24)"                       >> 
 # Pont SGI (ADR-0010/0011) — OPTIONNEL. À ne poser QUE si le pont doit être actif ; sinon laisser
 # vide, la route webhook se désactive alors d'elle-même (503) et rien d'autre n'est affecté.
 # ⚠️ La valeur DOIT être identique des DEUX côtés, sinon 401 ici et échec silencieux côté SGI.
-echo       "SGI_WEBHOOK_SECRET=$(openssl rand -base64 48)"                    >> /tmp/mc-secrets
+# ⚠️ NE DÉCOMMENTE QUE si le pont est activé ET que la MÊME valeur est posée côté SGI. Poser un
+# secret ici sans son pendant SGI ACTIVE la route avec une valeur que l'appelant ne connaît pas :
+# 401 côté MC, échec silencieux côté SGI (fire-and-forget) — et surtout tu perds le 503 qui
+# t'aurait signalé la mauvaise configuration. Laissé vide = route désactivée, diagnostic conservé.
+# echo     "SGI_WEBHOOK_SECRET=$(openssl rand -base64 48)"                    >> /tmp/mc-secrets
 cat /tmp/mc-secrets    # recopie ces valeurs dans infra/.env.prod, puis :
 shred -u /tmp/mc-secrets 2>/dev/null || rm -f /tmp/mc-secrets
 chmod 600 infra/.env.prod

@@ -151,3 +151,23 @@ def test_dev_continue_de_fonctionner_avec_le_defaut(client, db, monkeypatch):
     assert r.status_code == 200
     db.refresh(inst)
     assert inst.status == "active"
+
+
+def test_defaut_avec_espaces_parasites_desactive_aussi_la_route(client, db, monkeypatch):
+    """F1 (audit adverse) : `.env` et l'interpolation compose PRÉSERVENT espaces et sauts de ligne.
+    Un opérateur qui recopie la valeur du dépôt obtient un secret « différent » de la sentinelle —
+    comparer la valeur brute rouvrait exactement le trou que cette garde ferme."""
+    for valeur in (SECRET_DEV_DEFAUT + "\n", SECRET_DEV_DEFAUT + " ", " " + SECRET_DEV_DEFAUT, "   "):
+        inst = _installation(db, company_id=f"company-f1-{abs(hash(valeur)) % 10000}", status="active")
+        monkeypatch.setattr(settings, "environment", "prod")
+        monkeypatch.setattr(settings, "sgi_webhook_secret", valeur)
+        raw, sig = _signed({"company_id": inst.external_tenant_id,
+                            "activity_key": "agent_control", "enabled": False})
+
+        r = client.post(URL, content=raw,
+                        headers={"X-SGI-Signature": sig, "Content-Type": "application/json"})
+
+        assert r.status_code == 503, f"secret {valeur!r} accepté comme posé"
+        db.refresh(inst)
+        assert inst.status == "active"
+
