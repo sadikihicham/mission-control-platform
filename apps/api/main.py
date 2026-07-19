@@ -32,6 +32,7 @@ from apps.api.routers import agent_control_context as agent_control_context_rout
 from apps.api.routers import agents as agents_router
 from apps.api.routers import auth as auth_router
 from apps.api.routers import heartbeat as heartbeat_router
+from apps.api.routers import integrations_sgi as integrations_sgi_router
 from apps.api.routers import projects as projects_router
 
 
@@ -87,6 +88,9 @@ app.include_router(projects_router.router)
 # Auth (M2), ingest heartbeat (M3), temps réel (M4).
 app.include_router(auth_router.router)
 app.include_router(heartbeat_router.router)
+# Pont d'activation par tenant (ADR-0011) : webhook machine-à-machine SGI →
+# bascule mc_installations.status. Authentifié par signature HMAC, pas un JWT.
+app.include_router(integrations_sgi_router.router)
 app.include_router(ws_module.router)
 # WS temps réel V1 Agent Control (`/agent-control/ws`) : signaux tenant-scopés
 # (invalidation ciblée côté front). Canal `ac:events`, distinct du `/ws` V0.

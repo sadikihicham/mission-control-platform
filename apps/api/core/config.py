@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     sgi_jwt_secret: str = "dev-insecure-change-me"
     sgi_jwt_algorithm: str = "HS256"
 
+    # Pont d'activation par tenant (ADR-0011) : secret partagé HMAC pour vérifier
+    # POST /integrations/sgi/subscription-events (webhook sortant SGI → bascule de
+    # `mc_installations.status`). Distinct de sgi_jwt_secret (identité utilisateur)
+    # — celui-ci authentifie un appel machine-à-machine, jamais un utilisateur.
+    # Surchargeable via SGI_WEBHOOK_SECRET.
+    sgi_webhook_secret: str = "dev-insecure-change-me"
+
     # Ingest V1 (contrat V1 §8) : taille maximale d'un batch d'événements accepté
     # par POST /agent-control/v1/ingest/events. Au-delà → validation_error (422).
     mc_event_batch_max: int = 200
