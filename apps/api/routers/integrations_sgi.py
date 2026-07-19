@@ -29,6 +29,20 @@ router = APIRouter(tags=["integrations"])
 _TARGET_ACTIVITY_KEY = "agent_control"
 
 
+def _exige_pont_configure() -> None:
+    """Fail-closed : hors dev, refuse de servir tant que `SGI_WEBHOOK_SECRET` n'est pas posé.
+
+    Sans cette garde, la route — montée sans condition dans `main.py` — accepterait une signature
+    calculée avec la valeur par défaut du dépôt : quiconque connaît un `company_id` pourrait
+    suspendre le tenant correspondant. 503 (et non 401) parce que le problème est côté serveur,
+    pas côté appelant ; l'appelant SGI est en fire-and-forget et n'en sera pas perturbé."""
+    if not settings.est_environnement_dev and not settings.pont_sgi_configure:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "pont SGI non configuré (SGI_WEBHOOK_SECRET absent) — route désactivée",
+        )
+
+
 def _verify_signature(raw_body: bytes, signature: str | None) -> None:
     if not signature or not signature.startswith("sha256="):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "signature manquante ou malformée")
@@ -45,6 +59,7 @@ async def sgi_subscription_event(
     x_sgi_signature: str | None = Header(default=None, alias="X-SGI-Signature"),
     db: Session = Depends(get_db),
 ) -> dict:
+    _exige_pont_configure()
     raw_body = await request.body()
     _verify_signature(raw_body, x_sgi_signature)
 

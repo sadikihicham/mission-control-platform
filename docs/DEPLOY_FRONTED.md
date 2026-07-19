@@ -31,6 +31,10 @@ cp infra/.env.prod.example infra/.env.prod
 python3 -c "import secrets; print('JWT_SECRET='+secrets.token_hex(32))"      >> /tmp/mc-secrets
 python3 -c "import secrets; print('MC_INGEST_TOKEN='+secrets.token_hex(32))" >> /tmp/mc-secrets
 echo       "POSTGRES_PASSWORD=$(openssl rand -hex 24)"                       >> /tmp/mc-secrets
+# Pont SGI (ADR-0010/0011) — OPTIONNEL. À ne poser QUE si le pont doit être actif ; sinon laisser
+# vide, la route webhook se désactive alors d'elle-même (503) et rien d'autre n'est affecté.
+# ⚠️ La valeur DOIT être identique des DEUX côtés, sinon 401 ici et échec silencieux côté SGI.
+echo       "SGI_WEBHOOK_SECRET=$(openssl rand -base64 48)"                    >> /tmp/mc-secrets
 cat /tmp/mc-secrets    # recopie ces valeurs dans infra/.env.prod, puis :
 shred -u /tmp/mc-secrets 2>/dev/null || rm -f /tmp/mc-secrets
 chmod 600 infra/.env.prod
