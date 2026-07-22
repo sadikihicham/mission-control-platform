@@ -46,8 +46,6 @@ function ApprovalCard({ approval }: { approval: ApprovalOut }) {
     if (typeof window !== "undefined" && !window.confirm(msg)) return;
     // `version` = celle lue avec la demande : si un autre approbateur a tranché entre-temps, le
     // serveur refuse (verrou optimiste) au lieu d'écraser sa décision.
-    // `version` = celle lue avec la demande : si un autre approbateur a tranché entre-temps, le
-    // serveur refuse (verrou optimiste) au lieu d'écraser sa décision.
     decision.mutate({ decision: kind, version: approval.version, comment: comment || undefined });
   };
 
