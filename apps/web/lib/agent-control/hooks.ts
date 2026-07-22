@@ -265,14 +265,20 @@ export function useApprovals(status = "pending"): UseQueryResult<ApprovalListOut
   });
 }
 
+// `version` est OBLIGATOIRE côté serveur (`ApprovalDecisionIn`, control/schemas.py) : c'est le
+// verrou optimiste qui garantit « jamais deux décisions » sur la même demande. Il était absent du
+// corps envoyé ici, donc TOUTE décision depuis l'UI repartait en 422 — invisible car
+// `RequestOptions.body` est typé `unknown` (client.ts) et qu'aucun test front n'exerce ce chemin.
+// Le typer dans `input` rend désormais l'oubli impossible à la compilation, pas seulement corrigé
+// à cet appel-ci.
 export function useApprovalDecision(approvalId: string) {
   const qc = useQueryClient();
   const tenant = useTenantKey();
   return useMutation({
-    mutationFn: (input: { decision: "approve" | "reject"; comment?: string }) =>
+    mutationFn: (input: { decision: "approve" | "reject"; version: number; comment?: string }) =>
       acRequest<ApprovalOut>(`/approvals/${approvalId}/${input.decision}`, {
         method: "POST",
-        body: { comment: input.comment ?? null },
+        body: { version: input.version, comment: input.comment ?? null },
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["ac", tenant, "approvals"] });
