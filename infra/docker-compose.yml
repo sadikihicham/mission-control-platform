@@ -25,7 +25,18 @@ services:
   redis:
     image: redis:7-alpine
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # Sonde d'ÉCRITURE jugée sur la SORTIE, pas `ping` jugé sur le code de sortie. Mesuré sur
+      # `redis-cli 7.4.9` : le client ne traduit JAMAIS une erreur applicative en code de sortie
+      # (rc=0 sur `OOM command not allowed`, sur `NOAUTH`, sur `MISCONF`) et un `ping` réussit
+      # pendant un OOM (l'OOM ne refuse que les ÉCRITURES). Un `["CMD","redis-cli","ping"]` ne peut
+      # donc virer au rouge que si le serveur est injoignable en TCP — aveugle au refus d'écriture.
+      # Ici c'est PRÉVENTIF (ce redis n'a ni `requirepass` ni `--maxmemory` aujourd'hui, donc aucune
+      # des deux pannes n'est encore atteignable) : on rend la sonde honnête AVANT que l'ajout d'un
+      # `--maxmemory` ne crée le mode de panne au moment précis où l'ancienne sonde serait aveugle.
+      # Si un `requirepass` est ajouté un jour, passer le secret par `REDISCLI_AUTH` (jamais `-a`
+      # dans ce shell : un mot de passe à espace/guillemet y casserait le quoting → sonde rouge à vie
+      # → `depends_on` bloqué). La clé porte un TTL : évincable, jamais un poison pill.
+      test: ["CMD-SHELL", "redis-cli set __healthcheck__ 1 EX 30 | grep -qx OK"]
       interval: 5s
       timeout: 3s
       retries: 10
