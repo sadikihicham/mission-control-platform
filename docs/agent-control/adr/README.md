@@ -13,3 +13,4 @@ autoportant. Source de vérité du contrat : `.mission-control/CONTRACTS_AGENT_C
 | [0006](0006-cle-agent-namespacee.md) | Clé d'agent namespacée `<installation_key>:<local_key>` |
 | [0007](0007-extensions-additives-contract-a.md) | Extensions du Contract A additives et versionnées (migrations 0008+) |
 | [0008](0008-mapping-rbac-hote-vers-capacites.md) | Mapping RBAC hôte → capacités (adaptateur local) |
+| [0012](0012-break-glass-sso-jwt.md) | Break-glass local sous `MC_HOST_ADAPTER=jwt` (anti-verrouillage) |
